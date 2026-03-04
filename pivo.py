@@ -11,7 +11,7 @@ from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove
+from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 from aiogram.enums import ParseMode
 
@@ -112,9 +112,9 @@ class Database:
             )
         ''')
         
-        # Чаты (для взаимных лайков)
+        # Взаимные лайки (пары)
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS chats (
+            CREATE TABLE IF NOT EXISTS mutual_likes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user1 INTEGER,
                 user2 INTEGER,
@@ -152,9 +152,28 @@ class ProfileStates(StatesGroup):
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-# ========== КРАСИВОЕ МЕНЮ ПИВЧИК ==========
+# ========== УДОБНАЯ REPLY КЛАВИАТУРА (ВСЕГДА ВНИЗУ) ==========
+def get_main_keyboard():
+    """Главная клавиатура которая всегда внизу"""
+    builder = ReplyKeyboardBuilder()
+    builder.add(KeyboardButton(text="🍺 МОЯ АНКЕТА"))
+    builder.add(KeyboardButton(text="👀 СМОТРЕТЬ"))
+    builder.add(KeyboardButton(text="⭐ ПРЕМИУМ"))
+    builder.add(KeyboardButton(text="📊 СТАТИСТИКА"))
+    builder.add(KeyboardButton(text="⚙️ НАСТРОЙКИ"))
+    builder.add(KeyboardButton(text="❓ ПОМОЩЬ"))
+    builder.adjust(2, 2, 2)  # 3 ряда по 2 кнопки
+    return builder.as_markup(resize_keyboard=True)
+
+def get_back_keyboard():
+    """Клавиатура с кнопкой назад"""
+    builder = ReplyKeyboardBuilder()
+    builder.add(KeyboardButton(text="🍺 ГЛАВНОЕ МЕНЮ"))
+    return builder.as_markup(resize_keyboard=True)
+
+# ========== INLINE МЕНЮ ==========
 def main_menu(user_id):
-    """Главное меню с пивной тематикой"""
+    """Инлайн меню (дополнительное)"""
     cursor = db.conn.cursor()
     cursor.execute('''
         SELECT p.profile_id, u.is_premium, u.views_used, u.likes_used 
@@ -173,66 +192,65 @@ def main_menu(user_id):
     
     builder = InlineKeyboardBuilder()
     
-    # Шапка с пивом
-    builder.button(text="🍺 МОЯ КРУЖКА", callback_data="my_profile")
-    
     if has_profile:
-        builder.button(
-            text=f"👀 Смотреть анкеты | Осталось: {limit - views_used}", 
-            callback_data="view_profiles"
-        )
+        builder.button(text=f"👤 МОЯ АНКЕТА", callback_data="my_profile")
+        builder.button(text=f"👀 СМОТРЕТЬ ({limit - views_used} ост.)", callback_data="view_profiles")
     else:
-        builder.button(text="🍺 НАЛИТЬ ПИВЧИКА", callback_data="create_profile")
+        builder.button(text="🍺 СОЗДАТЬ АНКЕТУ", callback_data="create_profile")
     
-    builder.button(text="⭐ ПРЕМИУМ ПИВО", callback_data="premium_info")
-    builder.button(text="🏆 МОЯ СТАТИСТИКА", callback_data="my_stats")
+    builder.button(text="⭐ ПРЕМИУМ", callback_data="premium_info")
+    builder.button(text="📊 СТАТИСТИКА", callback_data="my_stats")
     builder.button(text="⚙️ НАСТРОЙКИ", callback_data="settings")
     builder.button(text="❓ ПОМОЩЬ", callback_data="help")
     
-    builder.adjust(1, 1, 2, 2)
+    builder.adjust(1, 2, 2, 1)
     return builder.as_markup()
 
 def profile_menu():
     """Меню анкеты"""
     builder = InlineKeyboardBuilder()
-    builder.button(text="🍺 Редактировать анкету", callback_data="edit_profile_menu")
-    builder.button(text="📸 Добавить фото", callback_data="add_photos")
-    builder.button(text="🎯 Мои интересы", callback_data="edit_interests")
-    builder.button(text="💔 Удалить анкету", callback_data="delete_profile")
-    builder.button(text="📊 Моя статистика", callback_data="my_stats")
-    builder.button(text="🍺 В главное меню", callback_data="back_to_main")
-    builder.adjust(1)
+    builder.button(text="✏️ РЕДАКТИРОВАТЬ", callback_data="edit_profile_menu")
+    builder.button(text="📸 ДОБАВИТЬ ФОТО", callback_data="add_photos")
+    builder.button(text="🎯 ИНТЕРЕСЫ", callback_data="edit_interests")
+    builder.button(text="💔 УДАЛИТЬ", callback_data="delete_profile")
+    builder.button(text="📊 СТАТИСТИКА", callback_data="my_stats")
+    builder.button(text="🍺 ГЛАВНОЕ МЕНЮ", callback_data="back_to_main")
+    builder.adjust(2, 2, 2)
     return builder.as_markup()
 
-def edit_profile_menu():
-    """Меню редактирования"""
-    builder = InlineKeyboardBuilder()
-    builder.button(text="🍺 Имя", callback_data="edit_name")
-    builder.button(text="📅 Возраст", callback_data="edit_age")
-    builder.button(text="👤 Пол", callback_data="edit_gender")
-    builder.button(text="🏙 Город", callback_data="edit_city")
-    builder.button(text="📝 О себе", callback_data="edit_about")
-    builder.button(text="🎯 Интересы", callback_data="edit_interests")
-    builder.button(text="🖼 Фото", callback_data="edit_photos")
-    builder.button(text="🍺 Назад", callback_data="my_profile")
-    builder.adjust(2, 2, 2, 1)
-    return builder.as_markup()
-
-def view_profile_keyboard(viewed_user_id, viewed_name):
+def view_profile_keyboard(viewed_user_id, viewed_name, viewed_username):
     """Кнопки при просмотре анкеты"""
     builder = InlineKeyboardBuilder()
-    builder.button(text="🍺 ЛАЙК", callback_data=f"like_{viewed_user_id}")
+    builder.button(text="🍺 ЛАЙКНУТЬ", callback_data=f"like_{viewed_user_id}")
     builder.button(text="⏭ ДАЛЬШЕ", callback_data="view_profiles")
+    
+    # Если есть username, добавляем кнопку перехода в ЛС
+    if viewed_username:
+        builder.button(text=f"📱 НАПИСАТЬ @{viewed_username}", url=f"https://t.me/{viewed_username}")
+    
     builder.button(text="⚠️ ПОЖАЛОВАТЬСЯ", callback_data=f"complaint_{viewed_user_id}")
     builder.button(text="🍺 В МЕНЮ", callback_data="back_to_main")
-    builder.adjust(2, 1, 1)
+    
+    builder.adjust(2, 1, 1, 1)
+    return builder.as_markup()
+
+def mutual_like_keyboard(user_id, username, name):
+    """Кнопки при взаимном лайке"""
+    builder = InlineKeyboardBuilder()
+    if username:
+        builder.button(text=f"📱 НАПИСАТЬ {name}", url=f"https://t.me/{username}")
+    else:
+        builder.button(text=f"📱 НЕТ USERNAME", callback_data="no_username")
+    builder.button(text="🍺 ПРОДОЛЖИТЬ", callback_data="view_profiles")
+    builder.button(text="🍺 В МЕНЮ", callback_data="back_to_main")
+    builder.adjust(1, 2)
     return builder.as_markup()
 
 def premium_menu():
     """Меню премиума"""
     builder = InlineKeyboardBuilder()
     builder.button(text="🍺 КУПИТЬ ПРЕМИУМ", callback_data="buy_premium")
-    builder.button(text="🎁 БОНУСЫ ПРЕМИУМ", callback_data="premium_benefits")
+    builder.button(text="🎁 БОНУСЫ", callback_data="premium_benefits")
     builder.button(text="🍺 НАЗАД", callback_data="back_to_main")
     builder.adjust(1)
     return builder.as_markup()
@@ -251,10 +269,77 @@ def interests_keyboard():
     builder.adjust(3)
     return builder.as_markup()
 
-def back_button():
-    builder = InlineKeyboardBuilder()
-    builder.button(text="🍺 НАЗАД", callback_data="back_to_main")
-    return builder.as_markup()
+# ========== ОБРАБОТЧИКИ REPLY КЛАВИАТУРЫ ==========
+@dp.message(F.text == "🍺 ГЛАВНОЕ МЕНЮ")
+async def reply_back_to_main(message: Message, state: FSMContext):
+    await state.clear()
+    await cmd_start(message, state)
+
+@dp.message(F.text == "🍺 МОЯ АНКЕТА")
+async def reply_my_profile(message: Message, state: FSMContext):
+    await state.clear()
+    callback = types.CallbackQuery(
+        id="0",
+        from_user=message.from_user,
+        message=message,
+        data="my_profile"
+    )
+    await my_profile(callback)
+
+@dp.message(F.text == "👀 СМОТРЕТЬ")
+async def reply_view_profiles(message: Message, state: FSMContext):
+    await state.clear()
+    callback = types.CallbackQuery(
+        id="0",
+        from_user=message.from_user,
+        message=message,
+        data="view_profiles"
+    )
+    await view_profiles(callback)
+
+@dp.message(F.text == "⭐ ПРЕМИУМ")
+async def reply_premium(message: Message, state: FSMContext):
+    await state.clear()
+    callback = types.CallbackQuery(
+        id="0",
+        from_user=message.from_user,
+        message=message,
+        data="premium_info"
+    )
+    await premium_info(callback)
+
+@dp.message(F.text == "📊 СТАТИСТИКА")
+async def reply_stats(message: Message, state: FSMContext):
+    await state.clear()
+    callback = types.CallbackQuery(
+        id="0",
+        from_user=message.from_user,
+        message=message,
+        data="my_stats"
+    )
+    await my_stats(callback)
+
+@dp.message(F.text == "⚙️ НАСТРОЙКИ")
+async def reply_settings(message: Message, state: FSMContext):
+    await state.clear()
+    callback = types.CallbackQuery(
+        id="0",
+        from_user=message.from_user,
+        message=message,
+        data="settings"
+    )
+    await settings_menu(callback)
+
+@dp.message(F.text == "❓ ПОМОЩЬ")
+async def reply_help(message: Message, state: FSMContext):
+    await state.clear()
+    callback = types.CallbackQuery(
+        id="0",
+        from_user=message.from_user,
+        message=message,
+        data="help"
+    )
+    await help_menu(callback)
 
 # ========== СТАРТ ==========
 @dp.message(CommandStart())
@@ -282,17 +367,24 @@ async def cmd_start(message: Message, state: FSMContext):
     # Приветствие
     welcome_text = (
         "🍺 *Добро пожаловать в ПИВЧИК\\!*\n\n"
-        "🔥 *Тут люди находят друг друга за кружкой пива*\n\n"
+        "🔥 *Здесь люди находят друг друга за кружкой пива*\n\n"
         "📌 *Что тут есть:*\n"
         "• Создай анкету и найди компанию\n"
         "• Смотри анкеты и ставь лайки\n"
-        "• При взаимном лайке \- открывается чат\n"
+        "• При взаимном лайке можно написать в ЛС\n"
         "• Премиум \- больше возможностей\n\n"
-        "👇 *Жми в меню и погнали\\!*"
+        "👇 *Клавиатура всегда внизу, жми и погнали\\!*"
     )
     
     await message.answer(
         welcome_text,
+        parse_mode=ParseMode.MARKDOWN_V2,
+        reply_markup=get_main_keyboard()  # Удобная клавиатура внизу
+    )
+    
+    # Дополнительно показываем инлайн меню
+    await message.answer(
+        "🍺 *Выбери действие:*",
         parse_mode=ParseMode.MARKDOWN_V2,
         reply_markup=main_menu(user_id)
     )
@@ -305,7 +397,8 @@ async def create_profile(callback: CallbackQuery, state: FSMContext):
         "🍺 *Наливаем пивчика\\!*\n\n"
         "Давай создадим твою анкету\n\n"
         "Как тебя зовут\\?",
-        parse_mode=ParseMode.MARKDOWN_V2
+        parse_mode=ParseMode.MARKDOWN_V2,
+        reply_markup=get_back_keyboard()
     )
     await state.set_state(ProfileStates.waiting_for_name)
 
@@ -367,7 +460,7 @@ async def process_gender(message: Message, state: FSMContext):
     await message.answer(
         "🏙 *Из какого ты города\\?*",
         parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=ReplyKeyboardRemove()
+        reply_markup=get_back_keyboard()
     )
     await state.set_state(ProfileStates.waiting_for_city)
 
@@ -438,7 +531,8 @@ async def interests_done(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer(
         f"📸 *Отправь минимум {REQUIRED_PHOTOS} фото*\n"
         "Можно отправлять по одному",
-        parse_mode=ParseMode.MARKDOWN_V2
+        parse_mode=ParseMode.MARKDOWN_V2,
+        reply_markup=get_back_keyboard()
     )
     await state.set_state(ProfileStates.waiting_for_photos)
     await state.update_data(photos=[])
@@ -521,6 +615,11 @@ async def confirm_profile(callback: CallbackQuery, state: FSMContext):
         "🍺 *Анкета создана\\!*\n\n"
         "Теперь можно смотреть анкеты и находить друзей\\!",
         parse_mode=ParseMode.MARKDOWN_V2,
+        reply_markup=get_main_keyboard()
+    )
+    await callback.message.answer(
+        "🍺 *Главное меню:*",
+        parse_mode=ParseMode.MARKDOWN_V2,
         reply_markup=main_menu(user_id)
     )
 
@@ -536,7 +635,7 @@ async def my_profile(callback: CallbackQuery):
     cursor = db.conn.cursor()
     
     cursor.execute('''
-        SELECT p.*, u.is_premium, u.views_used, u.likes_used 
+        SELECT p.*, u.is_premium, u.views_used, u.likes_used, u.username
         FROM profiles p
         JOIN users u ON p.user_id = u.user_id
         WHERE p.user_id = ?
@@ -546,7 +645,7 @@ async def my_profile(callback: CallbackQuery):
     if not profile:
         await callback.message.edit_text(
             "❌ *У тебя ещё нет анкеты*\n"
-            "Нажми 🍺 *НАЛИТЬ ПИВЧИКА* чтобы создать",
+            "Нажми 🍺 *СОЗДАТЬ АНКЕТУ*",
             parse_mode=ParseMode.MARKDOWN_V2,
             reply_markup=main_menu(user_id)
         )
@@ -554,9 +653,10 @@ async def my_profile(callback: CallbackQuery):
     
     photos = json.loads(profile[7])  # photos
     interests = json.loads(profile[8]) if profile[8] else []
-    is_premium = profile[-3]
-    views_used = profile[-2]
-    likes_used = profile[-1]
+    is_premium = profile[-4]
+    views_used = profile[-3]
+    likes_used = profile[-2]
+    username = profile[-1]
     limit = PREMIUM_LIMIT if is_premium else FREE_LIMIT
     
     premium_badge = " ⭐" if is_premium else ""
@@ -570,7 +670,8 @@ async def my_profile(callback: CallbackQuery):
         f"🏙 *Город:* {profile[5]}\n"
         f"📝 *О себе:* {profile[6]}\n"
         f"🎯 *Интересы:* {interests_text}\n"
-        f"🖼 *Фото:* {len(photos)} шт\\.\n\n"
+        f"🖼 *Фото:* {len(photos)} шт\\.\n"
+        f"📱 *Username:* @{username if username else 'нет'}\n\n"
         f"📊 *Статистика:*\n"
         f"• 👁 Просмотров: {profile[11]}\n"
         f"• ❤️ Лайков: {profile[12]}\n"
@@ -620,7 +721,7 @@ async def view_profiles(callback: CallbackQuery):
     if views_used >= limit:
         await callback.message.edit_text(
             f"❌ *Лимит просмотров исчерпан* \\({limit}\\)\n"
-            "Купи 🍺 *ПРЕМИУМ ПИВО* для увеличения лимита\\!",
+            "Купи 🍺 *ПРЕМИУМ* для увеличения лимита\\!",
             parse_mode=ParseMode.MARKDOWN_V2,
             reply_markup=premium_menu()
         )
@@ -628,7 +729,8 @@ async def view_profiles(callback: CallbackQuery):
     
     # Ищем анкету
     cursor.execute('''
-        SELECT p.* FROM profiles p
+        SELECT p.*, u.username FROM profiles p
+        JOIN users u ON p.user_id = u.user_id
         WHERE p.user_id != ? 
         AND p.is_active = 1
         AND p.user_id NOT IN (
@@ -685,13 +787,13 @@ async def view_profiles(callback: CallbackQuery):
             photo=photos[0],
             caption=text,
             parse_mode=ParseMode.MARKDOWN_V2,
-            reply_markup=view_profile_keyboard(profile[1], profile[2])
+            reply_markup=view_profile_keyboard(profile[1], profile[2], profile[-1])  # передаем username
         )
     else:
         await callback.message.edit_text(
             text,
             parse_mode=ParseMode.MARKDOWN_V2,
-            reply_markup=view_profile_keyboard(profile[1], profile[2])
+            reply_markup=view_profile_keyboard(profile[1], profile[2], profile[-1])
         )
 
 # ========== ЛАЙКИ ==========
@@ -740,35 +842,62 @@ async def process_like(callback: CallbackQuery):
         
         if cursor.fetchone():
             # Взаимный лайк!
+            # Сохраняем в таблицу mutual_likes
             cursor.execute('''
-                INSERT OR IGNORE INTO chats (user1, user2, created_at)
+                INSERT OR IGNORE INTO mutual_likes (user1, user2, created_at)
                 VALUES (?, ?, ?)
             ''', (min(from_user, to_user), max(from_user, to_user), datetime.now().isoformat()))
+            
+            # Обновляем статус у обоих лайков
+            cursor.execute('''
+                UPDATE likes SET is_mutual = 1 
+                WHERE (from_user = ? AND to_user = ?) OR (from_user = ? AND to_user = ?)
+            ''', (from_user, to_user, to_user, from_user))
+            
             db.conn.commit()
             
-            await callback.answer("🍺 ВЗАИМНЫЙ ЛАЙК! Чат открыт!", show_alert=True)
+            # Получаем информацию о пользователе
+            cursor.execute('SELECT username, first_name FROM users WHERE user_id = ?', (to_user,))
+            to_user_data = cursor.fetchone()
+            to_username = to_user_data[0]
+            to_name = to_user_data[1]
             
-            # Получаем имена
-            cursor.execute('SELECT name FROM profiles WHERE user_id = ?', (from_user,))
-            from_name = cursor.fetchone()[0]
             cursor.execute('SELECT name FROM profiles WHERE user_id = ?', (to_user,))
-            to_name = cursor.fetchone()[0]
+            profile_name = cursor.fetchone()
+            to_profile_name = profile_name[0] if profile_name else to_name
             
-            # Ссылки для чата (в реальном боте нужно создать чат)
+            await callback.answer("🍺 ВЗАИМНЫЙ ЛАЙК! Можете написать друг другу!", show_alert=True)
+            
+            # Уведомление для того кто лайкнул
             await bot.send_message(
                 from_user,
-                f"🍺 *Взаимный лайк с {to_name}\\!*\n\n"
-                f"Теперь вы можете пообщаться\n"
-                f"https://t.me/username",
-                parse_mode=ParseMode.MARKDOWN_V2
+                f"🍺 *Взаимный лайк\\!*\n\n"
+                f"Ты понравился *{to_profile_name}*\n"
+                f"Теперь вы можете пообщаться\\!",
+                parse_mode=ParseMode.MARKDOWN_V2,
+                reply_markup=mutual_like_keyboard(to_user, to_username, to_profile_name)
             )
+            
+            # Получаем информацию о том кто лайкнул
+            cursor.execute('SELECT username, first_name FROM users WHERE user_id = ?', (from_user,))
+            from_user_data = cursor.fetchone()
+            from_username = from_user_data[0]
+            from_name = from_user_data[1]
+            
+            cursor.execute('SELECT name FROM profiles WHERE user_id = ?', (from_user,))
+            from_profile_name = cursor.fetchone()
+            from_profile_name = from_profile_name[0] if from_profile_name else from_name
+            
+            # Уведомление для того кого лайкнули
             await bot.send_message(
                 to_user,
-                f"🍺 *Взаимный лайк с {from_name}\\!*\n\n"
-                f"Теперь вы можете пообщаться\n"
-                f"https://t.me/username",
-                parse_mode=ParseMode.MARKDOWN_V2
+                f"🍺 *Взаимный лайк\\!*\n\n"
+                f"Ты понравился *{from_profile_name}*\n"
+                f"Теперь вы можете пообщаться\\!",
+                parse_mode=ParseMode.MARKDOWN_V2,
+                reply_markup=mutual_like_keyboard(from_user, from_username, from_profile_name)
             )
+            
         else:
             await callback.answer("🍺 Лайк отправлен!")
             
@@ -786,25 +915,24 @@ async def premium_info(callback: CallbackQuery):
     if user and user[0]:
         until = datetime.fromisoformat(user[1]).strftime("%d.%m.%Y") if user[1] else "бессрочно"
         text = (
-            f"🍺 *У тебя ПРЕМИУМ ПИВО\\!*\n\n"
+            f"🍺 *У тебя ПРЕМИУМ\\!*\n\n"
             f"📅 Действует до: {until}\n\n"
             f"*Твои бонусы:*\n"
             f"• 🍺 {PREMIUM_LIMIT} просмотров\n"
             f"• 🍺 {PREMIUM_LIMIT} лайков\n"
             f"• ⭐ Значок в анкете\n"
-            f"• 🔥 Показ анкеты в топе"
+            f"• 🔥 Показ в топе"
         )
     else:
         text = (
-            f"🍺 *ПРЕМИУМ ПИВО*\n\n"
+            f"🍺 *ПРЕМИУМ*\n\n"
             f"*Лимиты:*\n"
             f"• Бесплатно: {FREE_LIMIT} просмотров/лайков\n"
             f"• Премиум: {PREMIUM_LIMIT} просмотров/лайков\n\n"
             f"*Бонусы:*\n"
             f"• 🍺 Больше анкет\n"
             f"• ⭐ Значок в профиле\n"
-            f"• 🔥 Показ в топе\n"
-            f"• 🎁 Эксклюзивные функции\n\n"
+            f"• 🔥 Показ в топе\n\n"
             f"💰 *Цена:* {PREMIUM_PRICE} руб\\.\n\n"
             f"Хочешь больше возможностей\\?"
         )
@@ -818,13 +946,12 @@ async def premium_info(callback: CallbackQuery):
 @dp.callback_query(F.data == "premium_benefits")
 async def premium_benefits(callback: CallbackQuery):
     text = (
-        "🍺 *Все бонусы ПРЕМИУМ ПИВО:*\n\n"
+        "🍺 *Все бонусы ПРЕМИУМ:*\n\n"
         f"🔹 {PREMIUM_LIMIT} просмотров \\(вместо {FREE_LIMIT}\\)\n"
         f"🔹 {PREMIUM_LIMIT} лайков \\(вместо {FREE_LIMIT}\\)\n"
         "🔹 Ваша анкета показывается чаще\n"
         "🔹 Специальный значок ⭐\n"
-        "🔹 Приоритетная поддержка\n"
-        "🔹 Доступ к новым функциям\n\n"
+        "🔹 Приоритетная поддержка\n\n"
         f"💰 *Цена:* {PREMIUM_PRICE} руб\\.\n\n"
         "Нажми 🍺 *КУПИТЬ ПРЕМИУМ* чтобы оформить\\!"
     )
@@ -948,7 +1075,7 @@ async def process_edit_value(message: Message, state: FSMContext):
     await state.clear()
     await message.answer(
         "🍺 Возвращаемся в анкету...",
-        reply_markup=ReplyKeyboardRemove()
+        reply_markup=get_main_keyboard()
     )
     await my_profile(types.CallbackQuery(
         id="0",
@@ -981,14 +1108,15 @@ async def confirm_delete(callback: CallbackQuery):
     cursor.execute('DELETE FROM profiles WHERE user_id = ?', (user_id,))
     cursor.execute('DELETE FROM likes WHERE from_user = ? OR to_user = ?', (user_id, user_id))
     cursor.execute('DELETE FROM views WHERE user_id = ? OR viewed_user_id = ?', (user_id, user_id))
+    cursor.execute('DELETE FROM mutual_likes WHERE user1 = ? OR user2 = ?', (user_id, user_id))
     db.conn.commit()
     
     await callback.message.delete()
     await callback.message.answer(
         "🍺 *Анкета удалена*\n\n"
-        "Чтобы создать новую, нажми 🍺 *НАЛИТЬ ПИВЧИКА*",
+        "Чтобы создать новую, нажми 🍺 *СОЗДАТЬ АНКЕТУ*",
         parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=main_menu(user_id)
+        reply_markup=get_main_keyboard()
     )
 
 # ========== СТАТИСТИКА ==========
@@ -1007,7 +1135,7 @@ async def my_stats(callback: CallbackQuery):
             (SELECT COUNT(*) FROM views WHERE user_id = ?) as viewed_count,
             (SELECT COUNT(*) FROM likes WHERE from_user = ?) as likes_given,
             (SELECT COUNT(*) FROM likes WHERE to_user = ?) as likes_received,
-            (SELECT COUNT(*) FROM chats WHERE user1 = ? OR user2 = ?) as mutual_count
+            (SELECT COUNT(*) FROM mutual_likes WHERE user1 = ? OR user2 = ?) as mutual_count
         FROM users u
         LEFT JOIN profiles p ON u.user_id = p.user_id
         WHERE u.user_id = ?
@@ -1148,7 +1276,8 @@ async def help_menu(callback: CallbackQuery):
         "1️⃣ Создай анкету\n"
         "2️⃣ Смотри анкеты других\n"
         "3️⃣ Ставь лайки\n"
-        "4️⃣ При взаимном лайке \- общайся\n\n"
+        "4️⃣ При взаимном лайке - появится кнопка с именем\n"
+        "5️⃣ Нажми на имя чтобы написать в ЛС\n\n"
         "*Лимиты:*\n"
         f"• Бесплатно: {FREE_LIMIT} просмотров/лайков\n"
         f"• Премиум: {PREMIUM_LIMIT} просмотров/лайков\n\n"
@@ -1182,7 +1311,6 @@ async def admin_panel(message: Message):
     
     cursor = db.conn.cursor()
     
-    # Статистика
     cursor.execute('SELECT COUNT(*) FROM users')
     total_users = cursor.fetchone()[0]
     
@@ -1192,7 +1320,7 @@ async def admin_panel(message: Message):
     cursor.execute('SELECT COUNT(*) FROM complaints')
     total_complaints = cursor.fetchone()[0]
     
-    cursor.execute('SELECT COUNT(*) FROM likes WHERE is_mutual = 1')
+    cursor.execute('SELECT COUNT(*) FROM mutual_likes')
     mutual_likes = cursor.fetchone()[0]
     
     text = (
@@ -1219,6 +1347,7 @@ async def main():
     print("🍺 Бот запускается...")
     print(f"🍺 Админ: {ADMIN_IDS[0]}")
     print("🍺 База данных: pivchik.db")
+    print("🍺 Клавиатура: ВКЛЮЧЕНА")
     print("🍺 =================================")
     
     await dp.start_polling(bot)
