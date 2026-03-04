@@ -15,8 +15,8 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 from aiogram.enums import ParseMode
 
 # ========== КОНФИГУРАЦИЯ ==========
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"  # ВСТАВЬ СВОЙ ТОКЕН
-ADMIN_IDS = [123456789, 987654321]  # ВСТАВЬ ID АДМИНОВ
+BOT_TOKEN = "8732723377:AAH4LuAnzfrlLUSFBv17gK7NssNIZtlDFK4"  # ВСТАВЬ СВОЙ ТОКЕН
+ADMIN_IDS = [2091630272, 1760627021]  # ВСТАВЬ ID АДМИНОВ
 PREMIUM_PRICE = 100  # Цена премиума в рублях (для примера)
 
 # Лимиты анкет
