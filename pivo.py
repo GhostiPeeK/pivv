@@ -15,7 +15,6 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 from aiogram.enums import ParseMode
-from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent
 from aiogram.types import LabeledPrice, PreCheckoutQuery
 
 # ========== КОНФИГ ==========
@@ -31,13 +30,12 @@ MAX_AGE = 100
 REQUIRED_PHOTOS = 1  # Только 1 фото обязательно
 ACCOUNT_MIN_AGE_DAYS = 30
 
-# ========== СТИЛИСТИКА ДАЙ ВИНЧИК ==========
+# ========== СТИЛИСТИКА ==========
 STYLES = {
-    "header": "🔞 ДАЙ ВИНЧИКА 🔞",
+    "header": "🍺 ПИВЧИК",
     "divider": "━━━━━━━━━━━━━━━━━━━━",
     "premium": "💎 ПРЕМИУМ",
-    "like": "💜",
-    "dislike": "💔",
+    "like": "❤️",
     "profile": "👤",
     "settings": "⚙️",
     "stats": "📊",
@@ -52,9 +50,9 @@ STYLES = {
 # ========== БАЗА ДАННЫХ ==========
 class Database:
     def __init__(self):
-        self.conn = sqlite3.connect("dai_vinchik.db", check_same_thread=False)
+        self.conn = sqlite3.connect("pivchik.db", check_same_thread=False)
         self._create_tables()
-        print("✅ База данных ДАЙ ВИНЧИК подключена")
+        print("✅ База данных ПИВЧИК подключена")
     
     def _create_tables(self):
         cursor = self.conn.cursor()
@@ -189,24 +187,24 @@ class ProfileStates(StatesGroup):
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-# ========== КЛАВИАТУРЫ В СТИЛЕ ДАЙ ВИНЧИК ==========
+# ========== КЛАВИАТУРЫ ==========
 def get_main_keyboard():
     """Главная клавиатура"""
     builder = ReplyKeyboardBuilder()
-    builder.add(KeyboardButton(text=f"{STYLES['profile']} МОЯ АНКЕТА"))
-    builder.add(KeyboardButton(text=f"{STYLES['next']} СМОТРЕТЬ"))
-    builder.add(KeyboardButton(text=f"{STYLES['premium']} ПРЕМИУМ"))
-    builder.add(KeyboardButton(text=f"{STYLES['stats']} СТАТИСТИКА"))
-    builder.add(KeyboardButton(text=f"{STYLES['settings']} НАСТРОЙКИ"))
-    builder.add(KeyboardButton(text=f"{STYLES['help']} ПОМОЩЬ"))
-    builder.add(KeyboardButton(text=f"💰 БАЛАНС"))
+    builder.add(KeyboardButton(text="👤 МОЯ АНКЕТА"))
+    builder.add(KeyboardButton(text="▶️ СМОТРЕТЬ"))
+    builder.add(KeyboardButton(text="💎 ПРЕМИУМ"))
+    builder.add(KeyboardButton(text="📊 СТАТИСТИКА"))
+    builder.add(KeyboardButton(text="⚙️ НАСТРОЙКИ"))
+    builder.add(KeyboardButton(text="❓ ПОМОЩЬ"))
+    builder.add(KeyboardButton(text="💰 БАЛАНС"))
     builder.adjust(2, 2, 2, 1)
     return builder.as_markup(resize_keyboard=True)
 
 def get_back_keyboard():
     """Клавиатура с кнопкой назад"""
     builder = ReplyKeyboardBuilder()
-    builder.add(KeyboardButton(text=f"{STYLES['back']} ГЛАВНОЕ МЕНЮ"))
+    builder.add(KeyboardButton(text="◀️ ГЛАВНОЕ МЕНЮ"))
     return builder.as_markup(resize_keyboard=True)
 
 # ========== INLINE МЕНЮ ==========
@@ -232,16 +230,16 @@ def main_menu(user_id):
     builder = InlineKeyboardBuilder()
     
     if has_profile:
-        builder.button(text=f"{STYLES['profile']} МОЯ АНКЕТА", callback_data="my_profile")
-        builder.button(text=f"{STYLES['next']} СМОТРЕТЬ ({limit - views_used})", callback_data="view_profiles")
+        builder.button(text=f"👤 МОЯ АНКЕТА", callback_data="my_profile")
+        builder.button(text=f"▶️ СМОТРЕТЬ ({limit - views_used})", callback_data="view_profiles")
     else:
-        builder.button(text=f"🔞 СОЗДАТЬ АНКЕТУ", callback_data="create_profile")
+        builder.button(text=f"🍺 СОЗДАТЬ АНКЕТУ", callback_data="create_profile")
     
-    builder.button(text=f"{STYLES['premium']} ПРЕМИУМ", callback_data="premium_info")
-    builder.button(text=f"{STYLES['stats']} СТАТИСТИКА", callback_data="my_stats")
+    builder.button(text=f"💎 ПРЕМИУМ", callback_data="premium_info")
+    builder.button(text=f"📊 СТАТИСТИКА", callback_data="my_stats")
     builder.button(text=f"💰 БАЛАНС: {balance} ⭐", callback_data="balance")
-    builder.button(text=f"{STYLES['settings']} НАСТРОЙКИ", callback_data="settings")
-    builder.button(text=f"{STYLES['help']} ПОМОЩЬ", callback_data="help")
+    builder.button(text=f"⚙️ НАСТРОЙКИ", callback_data="settings")
+    builder.button(text=f"❓ ПОМОЩЬ", callback_data="help")
     
     builder.adjust(1, 2, 2, 1)
     return builder.as_markup()
@@ -252,8 +250,8 @@ def profile_menu():
     builder.button(text="✏️ РЕДАКТИРОВАТЬ", callback_data="edit_profile_menu")
     builder.button(text="📸 ИЗМЕНИТЬ ФОТО", callback_data="edit_photo")
     builder.button(text="💔 УДАЛИТЬ", callback_data="delete_profile")
-    builder.button(text=f"{STYLES['stats']} СТАТИСТИКА", callback_data="my_stats")
-    builder.button(text=f"{STYLES['back']} ГЛАВНОЕ МЕНЮ", callback_data="back_to_main")
+    builder.button(text="📊 СТАТИСТИКА", callback_data="my_stats")
+    builder.button(text="◀️ ГЛАВНОЕ МЕНЮ", callback_data="back_to_main")
     builder.adjust(2, 2, 1)
     return builder.as_markup()
 
@@ -266,7 +264,7 @@ def edit_profile_menu():
     builder.button(text="🏙 Город", callback_data="edit_city")
     builder.button(text="📝 О себе", callback_data="edit_about")
     builder.button(text="📸 Фото", callback_data="edit_photo")
-    builder.button(text=f"{STYLES['back']} НАЗАД", callback_data="my_profile")
+    builder.button(text="◀️ НАЗАД", callback_data="my_profile")
     builder.adjust(2, 2, 2, 1)
     return builder.as_markup()
 
@@ -276,31 +274,31 @@ def premium_menu():
     builder.button(text="⭐ 50 STARS (1 день)", callback_data="buy_stars_50")
     builder.button(text="⭐ 250 STARS (7 дней)", callback_data="buy_stars_250")
     builder.button(text="⭐ 1000 STARS (30 дней)", callback_data="buy_stars_1000")
-    builder.button(text=f"{STYLES['back']} НАЗАД", callback_data="back_to_main")
+    builder.button(text="◀️ НАЗАД", callback_data="back_to_main")
     builder.adjust(2, 1, 1)
     return builder.as_markup()
 
 def view_profile_keyboard(viewed_user_id, viewed_username):
     """Кнопки при просмотре анкеты"""
     builder = InlineKeyboardBuilder()
-    builder.button(text=f"{STYLES['like']} ЛАЙК", callback_data=f"like_{viewed_user_id}")
-    builder.button(text=f"{STYLES['next']} ДАЛЬШЕ", callback_data="view_profiles")
+    builder.button(text=f"❤️ ЛАЙК", callback_data=f"like_{viewed_user_id}")
+    builder.button(text=f"▶️ ДАЛЬШЕ", callback_data="view_profiles")
     
     if viewed_username:
         builder.button(text=f"📱 НАПИСАТЬ", url=f"https://t.me/{viewed_username}")
     
-    builder.button(text=f"{STYLES['warning']} ЖАЛОБА", callback_data=f"complaint_{viewed_user_id}")
-    builder.button(text=f"{STYLES['back']} В МЕНЮ", callback_data="back_to_main")
+    builder.button(text=f"⚠️ ЖАЛОБА", callback_data=f"complaint_{viewed_user_id}")
+    builder.button(text=f"◀️ В МЕНЮ", callback_data="back_to_main")
     builder.adjust(2, 1, 1, 1)
     return builder.as_markup()
 
 # ========== ОБРАБОТЧИКИ REPLY КЛАВИАТУРЫ ==========
-@dp.message(F.text == f"{STYLES['back']} ГЛАВНОЕ МЕНЮ")
+@dp.message(F.text == "◀️ ГЛАВНОЕ МЕНЮ")
 async def reply_back_to_main(message: Message, state: FSMContext):
     await state.clear()
     await cmd_start(message, state)
 
-@dp.message(F.text == f"{STYLES['profile']} МОЯ АНКЕТА")
+@dp.message(F.text == "👤 МОЯ АНКЕТА")
 async def reply_my_profile(message: Message, state: FSMContext):
     await state.clear()
     user_id = message.from_user.id
@@ -310,74 +308,19 @@ async def reply_my_profile(message: Message, state: FSMContext):
     
     if not profile:
         await message.answer(
-            f"{STYLES['error']} У тебя ещё нет анкеты.\n"
-            f"Нажни '🔞 СОЗДАТЬ АНКЕТУ' в меню ниже:",
+            f"❌ У тебя ещё нет анкеты.\n"
+            f"Нажни '🍺 СОЗДАТЬ АНКЕТУ' в меню ниже:",
             reply_markup=get_main_keyboard()
         )
         await message.answer(
-            f"{STYLES['header']}",
+            f"🍺 ПИВЧИК",
             reply_markup=main_menu(user_id)
         )
         return
     
     await show_my_profile(message, user_id)
 
-async def show_my_profile(message: Message, user_id: int):
-    cursor = db.conn.cursor()
-    cursor.execute('''
-        SELECT p.*, u.is_premium, u.views_used, u.likes_used, u.username
-        FROM profiles p
-        JOIN users u ON p.user_id = u.user_id
-        WHERE p.user_id = ?
-    ''', (user_id,))
-    profile = cursor.fetchone()
-    
-    if not profile:
-        return
-    
-    photo = profile[7]
-    interests = json.loads(profile[8]) if profile[8] else []
-    is_premium = profile[-4]
-    views_used = profile[-3]
-    likes_used = profile[-2]
-    username = profile[-1]
-    limit = PREMIUM_LIMIT if is_premium else FREE_LIMIT
-    
-    premium_badge = f" {STYLES['premium']}" if is_premium else ""
-    interests_text = ", ".join(interests) if interests else "Не указаны"
-    
-    text = (
-        f"{STYLES['divider']}\n"
-        f"{STYLES['profile']} ТВОЯ АНКЕТА{premium_badge}\n"
-        f"{STYLES['divider']}\n\n"
-        f"👤 Имя: {profile[2]}\n"
-        f"📅 Возраст: {profile[3]}\n"
-        f"⚥ Пол: {profile[4]}\n"
-        f"🏙 Город: {profile[5]}\n"
-        f"📝 О себе: {profile[6]}\n"
-        f"🎯 Интересы: {interests_text}\n\n"
-        f"{STYLES['divider']}\n"
-        f"📊 СТАТИСТИКА:\n"
-        f"• 👁 Просмотров: {profile[12]}\n"
-        f"• {STYLES['like']} Лайков: {profile[13]}\n"
-        f"• 📈 Осталось: {limit - views_used} просмотров\n"
-        f"• 📈 Осталось: {limit - likes_used} лайков\n"
-        f"{STYLES['divider']}"
-    )
-    
-    if photo:
-        await message.answer_photo(
-            photo=photo,
-            caption=text,
-            reply_markup=profile_menu()
-        )
-    else:
-        await message.answer(
-            text,
-            reply_markup=profile_menu()
-        )
-
-@dp.message(F.text == f"{STYLES['next']} СМОТРЕТЬ")
+@dp.message(F.text == "▶️ СМОТРЕТЬ")
 async def reply_view_profiles(message: Message, state: FSMContext):
     await state.clear()
     user_id = message.from_user.id
@@ -386,7 +329,7 @@ async def reply_view_profiles(message: Message, state: FSMContext):
     cursor.execute('SELECT profile_id FROM profiles WHERE user_id = ?', (user_id,))
     if not cursor.fetchone():
         await message.answer(
-            f"{STYLES['error']} Сначала создай анкету!",
+            f"❌ Сначала создай анкету!",
             reply_markup=get_main_keyboard()
         )
         return
@@ -399,76 +342,15 @@ async def reply_view_profiles(message: Message, state: FSMContext):
     
     if views_used >= limit:
         await message.answer(
-            f"{STYLES['error']} Лимит просмотров исчерпан ({limit})\n"
-            f"Купи {STYLES['premium']} для увеличения лимита!",
+            f"❌ Лимит просмотров исчерпан ({limit})\n"
+            f"Купи ПРЕМИУМ для увеличения лимита!",
             reply_markup=get_main_keyboard()
         )
         return
     
-    cursor.execute('''
-        SELECT p.*, u.username FROM profiles p
-        JOIN users u ON p.user_id = u.user_id
-        WHERE p.user_id != ? 
-        AND p.is_active = 1
-        AND p.user_id NOT IN (
-            SELECT viewed_user_id FROM views WHERE user_id = ?
-        )
-        ORDER BY RANDOM()
-        LIMIT 1
-    ''', (user_id, user_id))
-    
-    profile = cursor.fetchone()
-    
-    if not profile:
-        await message.answer(
-            f"{STYLES['header']} Ты посмотрел все анкеты! Заходи позже",
-            reply_markup=get_main_keyboard()
-        )
-        return
-    
-    cursor.execute('''
-        INSERT OR IGNORE INTO views (user_id, viewed_user_id, viewed_at)
-        VALUES (?, ?, ?)
-    ''', (user_id, profile[1], datetime.now().isoformat()))
-    
-    cursor.execute('''
-        UPDATE users SET views_used = views_used + 1 WHERE user_id = ?
-    ''', (user_id,))
-    
-    cursor.execute('''
-        UPDATE profiles SET views_count = views_count + 1 WHERE user_id = ?
-    ''', (profile[1],))
-    
-    db.conn.commit()
-    
-    photo = profile[7]
-    interests = json.loads(profile[8]) if profile[8] else []
-    interests_text = ", ".join(interests) if interests else "Не указаны"
-    
-    text = (
-        f"{STYLES['divider']}\n"
-        f"👤 {profile[2]}, {profile[3]}\n"
-        f"⚥ Пол: {profile[4]}\n"
-        f"🏙 Город: {profile[5]}\n"
-        f"🎯 Интересы: {interests_text}\n"
-        f"{STYLES['divider']}\n"
-        f"📝 {profile[6]}\n\n"
-        f"❤️ Лайков: {profile[12]} | 👁 Просмотров: {profile[11]}"
-    )
-    
-    if photo:
-        await message.answer_photo(
-            photo=photo,
-            caption=text,
-            reply_markup=view_profile_keyboard(profile[1], profile[-1])
-        )
-    else:
-        await message.answer(
-            text,
-            reply_markup=view_profile_keyboard(profile[1], profile[-1])
-        )
+    await show_next_profile(message, user_id)
 
-@dp.message(F.text == f"{STYLES['premium']} ПРЕМИУМ")
+@dp.message(F.text == "💎 ПРЕМИУМ")
 async def reply_premium(message: Message, state: FSMContext):
     await state.clear()
     user_id = message.from_user.id
@@ -480,9 +362,9 @@ async def reply_premium(message: Message, state: FSMContext):
     if user and user[0]:
         until = datetime.fromisoformat(user[1]).strftime("%d.%m.%Y") if user[1] else "бессрочно"
         text = (
-            f"{STYLES['divider']}\n"
-            f"{STYLES['premium']} У ТЕБЯ ПРЕМИУМ!\n"
-            f"{STYLES['divider']}\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"💎 У ТЕБЯ ПРЕМИУМ!\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n\n"
             f"📅 Действует до: {until}\n\n"
             f"Твои бонусы:\n"
             f"• {PREMIUM_LIMIT} просмотров\n"
@@ -492,9 +374,9 @@ async def reply_premium(message: Message, state: FSMContext):
         )
     else:
         text = (
-            f"{STYLES['divider']}\n"
-            f"{STYLES['premium']} ПРЕМИУМ\n"
-            f"{STYLES['divider']}\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"💎 ПРЕМИУМ\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n\n"
             f"Лимиты:\n"
             f"• Бесплатно: {FREE_LIMIT} просмотров/лайков\n"
             f"• Премиум: {PREMIUM_LIMIT} просмотров/лайков\n\n"
@@ -513,7 +395,7 @@ async def reply_premium(message: Message, state: FSMContext):
         reply_markup=premium_menu()
     )
 
-@dp.message(F.text == f"{STYLES['stats']} СТАТИСТИКА")
+@dp.message(F.text == "📊 СТАТИСТИКА")
 async def reply_stats(message: Message, state: FSMContext):
     await state.clear()
     user_id = message.from_user.id
@@ -542,9 +424,9 @@ async def reply_stats(message: Message, state: FSMContext):
         limit = PREMIUM_LIMIT if is_premium else FREE_LIMIT
         
         text = (
-            f"{STYLES['divider']}\n"
-            f"{STYLES['stats']} ТВОЯ СТАТИСТИКА\n"
-            f"{STYLES['divider']}\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"📊 ТВОЯ СТАТИСТИКА\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n\n"
             f"👁 Просмотры:\n"
             f"• Тебя посмотрели: {profile_views}\n"
             f"• Ты посмотрел: {viewed_count}\n"
@@ -554,7 +436,7 @@ async def reply_stats(message: Message, state: FSMContext):
             f"• Ты лайкнул: {likes_given}\n"
             f"• Взаимные: {mutual_count}\n"
             f"• Осталось: {limit - likes_used}\n\n"
-            f"⭐ Премиум: {'ДА' if is_premium else 'НЕТ'}"
+            f"💎 Премиум: {'ДА' if is_premium else 'НЕТ'}"
         )
         
         await message.answer(
@@ -562,32 +444,32 @@ async def reply_stats(message: Message, state: FSMContext):
             reply_markup=get_main_keyboard()
         )
 
-@dp.message(F.text == f"{STYLES['settings']} НАСТРОЙКИ")
+@dp.message(F.text == "⚙️ НАСТРОЙКИ")
 async def reply_settings(message: Message, state: FSMContext):
     await state.clear()
     
     builder = InlineKeyboardBuilder()
     builder.button(text="🔔 Уведомления", callback_data="notify_settings")
     builder.button(text="🔐 Приватность", callback_data="privacy")
-    builder.button(text=f"{STYLES['back']} НАЗАД", callback_data="back_to_main")
+    builder.button(text="◀️ НАЗАД", callback_data="back_to_main")
     builder.adjust(1)
     
     await message.answer(
-        f"{STYLES['divider']}\n"
-        f"{STYLES['settings']} НАСТРОЙКИ\n"
-        f"{STYLES['divider']}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"⚙️ НАСТРОЙКИ\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
         f"Тут можно настроить бота:",
         reply_markup=builder.as_markup()
     )
 
-@dp.message(F.text == f"{STYLES['help']} ПОМОЩЬ")
+@dp.message(F.text == "❓ ПОМОЩЬ")
 async def reply_help(message: Message, state: FSMContext):
     await state.clear()
     
     text = (
-        f"{STYLES['divider']}\n"
-        f"{STYLES['help']} ПОМОЩЬ\n"
-        f"{STYLES['divider']}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"❓ ПОМОЩЬ\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
         f"Как пользоваться:\n"
         f"1️⃣ Создай анкету с фото\n"
         f"2️⃣ Смотри анкеты других\n"
@@ -600,11 +482,11 @@ async def reply_help(message: Message, state: FSMContext):
         f"• Только реальные фото\n"
         f"• Без оскорблений\n"
         f"• Возраст {MIN_AGE}+\n"
-        f"{STYLES['divider']}"
+        f"━━━━━━━━━━━━━━━━━━━━"
     )
     
     builder = InlineKeyboardBuilder()
-    builder.button(text=f"{STYLES['back']} ГЛАВНОЕ МЕНЮ", callback_data="back_to_main")
+    builder.button(text="◀️ ГЛАВНОЕ МЕНЮ", callback_data="back_to_main")
     
     await message.answer(
         text,
@@ -621,9 +503,9 @@ async def reply_balance(message: Message, state: FSMContext):
     balance = cursor.fetchone()[0]
     
     text = (
-        f"{STYLES['divider']}\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
         f"💰 ТВОЙ БАЛАНС\n"
-        f"{STYLES['divider']}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
         f"У тебя: {balance} ⭐\n\n"
         f"Цены:\n"
         f"• 50 ⭐ = 1 день Премиума\n"
@@ -635,7 +517,7 @@ async def reply_balance(message: Message, state: FSMContext):
     builder.button(text="⭐ 50 STARS", callback_data="buy_stars_50")
     builder.button(text="⭐ 250 STARS", callback_data="buy_stars_250")
     builder.button(text="⭐ 1000 STARS", callback_data="buy_stars_1000")
-    builder.button(text=f"{STYLES['back']} НАЗАД", callback_data="back_to_main")
+    builder.button(text="◀️ НАЗАД", callback_data="back_to_main")
     builder.adjust(2, 1, 1)
     
     await message.answer(
@@ -666,10 +548,10 @@ async def cmd_start(message: Message, state: FSMContext):
     db.conn.commit()
     
     welcome_text = (
-        f"{STYLES['divider']}\n"
-        f"{STYLES['header']}\n"
-        f"{STYLES['divider']}\n\n"
-        f"🔞 Здесь люди находят друг друга\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🍺 ПИВЧИК\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🍺 Здесь люди находят друг друга\n\n"
         f"📌 Что тут есть:\n"
         f"• Создай анкету с фото\n"
         f"• Смотри анкеты и ставь лайки\n"
@@ -684,18 +566,141 @@ async def cmd_start(message: Message, state: FSMContext):
     )
     
     await message.answer(
-        f"{STYLES['header']}",
+        f"🍺 ПИВЧИК",
         reply_markup=main_menu(user_id)
     )
+
+# ========== ФУНКЦИЯ ПОКАЗА СЛЕДУЮЩЕЙ АНКЕТЫ ==========
+async def show_next_profile(message: Message, user_id: int):
+    cursor = db.conn.cursor()
+    
+    cursor.execute('''
+        SELECT p.*, u.username FROM profiles p
+        JOIN users u ON p.user_id = u.user_id
+        WHERE p.user_id != ? 
+        AND p.is_active = 1
+        AND p.user_id NOT IN (
+            SELECT viewed_user_id FROM views WHERE user_id = ?
+        )
+        ORDER BY RANDOM()
+        LIMIT 1
+    ''', (user_id, user_id))
+    
+    profile = cursor.fetchone()
+    
+    if not profile:
+        await message.answer(
+            f"🍺 Ты посмотрел все анкеты! Заходи позже",
+            reply_markup=get_main_keyboard()
+        )
+        return
+    
+    cursor.execute('''
+        INSERT OR IGNORE INTO views (user_id, viewed_user_id, viewed_at)
+        VALUES (?, ?, ?)
+    ''', (user_id, profile[1], datetime.now().isoformat()))
+    
+    cursor.execute('''
+        UPDATE users SET views_used = views_used + 1 WHERE user_id = ?
+    ''', (user_id,))
+    
+    cursor.execute('''
+        UPDATE profiles SET views_count = views_count + 1 WHERE user_id = ?
+    ''', (profile[1],))
+    
+    db.conn.commit()
+    
+    photo = profile[7]
+    interests = json.loads(profile[8]) if profile[8] else []
+    interests_text = ", ".join(interests) if interests else "Не указаны"
+    
+    text = (
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 {profile[2]}, {profile[3]}\n"
+        f"⚥ Пол: {profile[4]}\n"
+        f"🏙 Город: {profile[5]}\n"
+        f"🎯 Интересы: {interests_text}\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"📝 {profile[6]}\n\n"
+        f"❤️ Лайков: {profile[12]} | 👁 Просмотров: {profile[11]}"
+    )
+    
+    if photo:
+        await message.answer_photo(
+            photo=photo,
+            caption=text,
+            reply_markup=view_profile_keyboard(profile[1], profile[-1])
+        )
+    else:
+        await message.answer(
+            text,
+            reply_markup=view_profile_keyboard(profile[1], profile[-1])
+        )
+
+# ========== ФУНКЦИЯ ПОКАЗА МОЕЙ АНКЕТЫ ==========
+async def show_my_profile(message: Message, user_id: int):
+    cursor = db.conn.cursor()
+    cursor.execute('''
+        SELECT p.*, u.is_premium, u.views_used, u.likes_used, u.username
+        FROM profiles p
+        JOIN users u ON p.user_id = u.user_id
+        WHERE p.user_id = ?
+    ''', (user_id,))
+    profile = cursor.fetchone()
+    
+    if not profile:
+        return
+    
+    photo = profile[7]
+    interests = json.loads(profile[8]) if profile[8] else []
+    is_premium = profile[-4]
+    views_used = profile[-3]
+    likes_used = profile[-2]
+    username = profile[-1]
+    limit = PREMIUM_LIMIT if is_premium else FREE_LIMIT
+    
+    premium_badge = f" 💎" if is_premium else ""
+    interests_text = ", ".join(interests) if interests else "Не указаны"
+    
+    text = (
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 ТВОЯ АНКЕТА{premium_badge}\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"👤 Имя: {profile[2]}\n"
+        f"📅 Возраст: {profile[3]}\n"
+        f"⚥ Пол: {profile[4]}\n"
+        f"🏙 Город: {profile[5]}\n"
+        f"📝 О себе: {profile[6]}\n"
+        f"🎯 Интересы: {interests_text}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"📊 СТАТИСТИКА:\n"
+        f"• 👁 Просмотров: {profile[12]}\n"
+        f"• ❤️ Лайков: {profile[13]}\n"
+        f"• 📈 Осталось: {limit - views_used} просмотров\n"
+        f"• 📈 Осталось: {limit - likes_used} лайков\n"
+        f"━━━━━━━━━━━━━━━━━━━━"
+    )
+    
+    if photo:
+        await message.answer_photo(
+            photo=photo,
+            caption=text,
+            reply_markup=profile_menu()
+        )
+    else:
+        await message.answer(
+            text,
+            reply_markup=profile_menu()
+        )
 
 # ========== СОЗДАНИЕ АНКЕТЫ ==========
 @dp.callback_query(F.data == "create_profile")
 async def create_profile(callback: CallbackQuery, state: FSMContext):
     await callback.message.delete()
     await callback.message.answer(
-        f"{STYLES['divider']}\n"
-        f"🔞 СОЗДАНИЕ АНКЕТЫ\n"
-        f"{STYLES['divider']}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🍺 СОЗДАНИЕ АНКЕТЫ\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
         f"Как тебя зовут?",
         reply_markup=get_back_keyboard()
     )
@@ -704,7 +709,7 @@ async def create_profile(callback: CallbackQuery, state: FSMContext):
 @dp.message(ProfileStates.waiting_for_name)
 async def process_name(message: Message, state: FSMContext):
     if len(message.text) > 50:
-        await message.answer(f"{STYLES['error']} Слишком длинное имя. Максимум 50 символов.")
+        await message.answer(f"❌ Слишком длинное имя. Максимум 50 символов.")
         return
     
     await state.update_data(name=message.text)
@@ -720,7 +725,7 @@ async def process_age(message: Message, state: FSMContext):
         if age < MIN_AGE or age > MAX_AGE:
             raise ValueError
     except ValueError:
-        await message.answer(f"{STYLES['error']} Введи число от {MIN_AGE} до {MAX_AGE}")
+        await message.answer(f"❌ Введи число от {MIN_AGE} до {MAX_AGE}")
         return
     
     await state.update_data(age=age)
@@ -746,7 +751,7 @@ async def process_gender(message: Message, state: FSMContext):
     }
     
     if message.text not in gender_map:
-        await message.answer(f"{STYLES['error']} Используй кнопки ниже")
+        await message.answer(f"❌ Используй кнопки ниже")
         return
     
     await state.update_data(gender=gender_map[message.text])
@@ -759,14 +764,14 @@ async def process_gender(message: Message, state: FSMContext):
 @dp.message(ProfileStates.waiting_for_city)
 async def process_city(message: Message, state: FSMContext):
     if len(message.text) > 50:
-        await message.answer(f"{STYLES['error']} Слишком длинное название города")
+        await message.answer(f"❌ Слишком длинное название города")
         return
     
     await state.update_data(city=message.text)
     await message.answer(
         "📝 Напиши немного о себе\n"
         "Чем занимаешься, что ищешь?\n\n"
-        f"{STYLES['warning']} Ссылки и юзернеймы запрещены!"
+        f"⚠️ Ссылки и юзернеймы запрещены!"
     )
     await state.set_state(ProfileStates.waiting_for_about)
 
@@ -775,13 +780,13 @@ async def process_about(message: Message, state: FSMContext):
     forbidden = ["@", "t.me/", "https://", "http://", "vk.com", "instagram.com"]
     if any(x in message.text.lower() for x in forbidden):
         await message.answer(
-            f"{STYLES['error']} В описании запрещены ссылки и юзернеймы!\n"
+            f"❌ В описании запрещены ссылки и юзернеймы!\n"
             "Напиши без них"
         )
         return
     
     if len(message.text) > 500:
-        await message.answer(f"{STYLES['error']} Слишком длинное описание. Максимум 500 символов")
+        await message.answer(f"❌ Слишком длинное описание. Максимум 500 символов")
         return
     
     await state.update_data(about=message.text)
@@ -802,19 +807,19 @@ async def process_photo(message: Message, state: FSMContext):
 
 async def show_profile_preview(message: Message, state: FSMContext, data):
     preview_text = (
-        f"{STYLES['divider']}\n"
-        f"🔞 ПРЕВЬЮ АНКЕТЫ\n"
-        f"{STYLES['divider']}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🍺 ПРЕВЬЮ АНКЕТЫ\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
         f"👤 Имя: {data['name']}\n"
         f"📅 Возраст: {data['age']}\n"
         f"⚥ Пол: {data['gender']}\n"
         f"🏙 Город: {data['city']}\n"
         f"📝 О себе: {data['about']}\n\n"
-        f"{STYLES['success']} Всё верно?"
+        f"✅ Всё верно?"
     )
     
     confirm_builder = InlineKeyboardBuilder()
-    confirm_builder.button(text=f"{STYLES['success']} ДА, СОЗДАТЬ", callback_data="confirm_profile")
+    confirm_builder.button(text=f"✅ ДА, СОЗДАТЬ", callback_data="confirm_profile")
     confirm_builder.button(text="✏️ ИСПРАВИТЬ", callback_data="edit_profile")
     
     await message.answer_photo(
@@ -846,14 +851,14 @@ async def confirm_profile(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     await callback.message.delete()
     await callback.message.answer(
-        f"{STYLES['divider']}\n"
-        f"{STYLES['success']} АНКЕТА СОЗДАНА!\n"
-        f"{STYLES['divider']}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"✅ АНКЕТА СОЗДАНА!\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
         f"Теперь можно смотреть анкеты!",
         reply_markup=get_main_keyboard()
     )
     await callback.message.answer(
-        f"{STYLES['header']}",
+        f"🍺 ПИВЧИК",
         reply_markup=main_menu(user_id)
     )
 
@@ -869,7 +874,7 @@ async def process_like(callback: CallbackQuery):
     to_user = int(callback.data.split("_")[1])
     
     if from_user == to_user:
-        await callback.answer(f"{STYLES['error']} Нельзя лайкнуть себя!", show_alert=True)
+        await callback.answer(f"❌ Нельзя лайкнуть себя!", show_alert=True)
         return
     
     cursor = db.conn.cursor()
@@ -881,7 +886,7 @@ async def process_like(callback: CallbackQuery):
     limit = PREMIUM_LIMIT if is_premium else FREE_LIMIT
     
     if likes_used >= limit:
-        await callback.answer(f"{STYLES['error']} Лимит лайков ({limit}) исчерпан!", show_alert=True)
+        await callback.answer(f"❌ Лимит лайков ({limit}) исчерпан!", show_alert=True)
         return
     
     try:
@@ -927,20 +932,20 @@ async def process_like(callback: CallbackQuery):
             profile_name = cursor.fetchone()
             to_profile_name = profile_name[0] if profile_name else to_name
             
-            await callback.answer(f"{STYLES['like']} ВЗАИМНЫЙ ЛАЙК!", show_alert=True)
+            await callback.answer(f"❤️ ВЗАИМНЫЙ ЛАЙК!", show_alert=True)
             
             builder = InlineKeyboardBuilder()
             if to_username:
                 builder.button(text=f"📱 НАПИСАТЬ {to_profile_name}", url=f"https://t.me/{to_username}")
-            builder.button(text=f"{STYLES['next']} ПРОДОЛЖИТЬ", callback_data="view_profiles")
-            builder.button(text=f"{STYLES['back']} В МЕНЮ", callback_data="back_to_main")
+            builder.button(text=f"▶️ ПРОДОЛЖИТЬ", callback_data="view_profiles")
+            builder.button(text=f"◀️ В МЕНЮ", callback_data="back_to_main")
             builder.adjust(1, 2)
             
             await bot.send_message(
                 from_user,
-                f"{STYLES['divider']}\n"
-                f"{STYLES['like']} ВЗАИМНЫЙ ЛАЙК!\n"
-                f"{STYLES['divider']}\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"❤️ ВЗАИМНЫЙ ЛАЙК!\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n\n"
                 f"Ты понравился {to_profile_name}!\n"
                 f"Теперь вы можете пообщаться!",
                 reply_markup=builder.as_markup()
@@ -958,25 +963,25 @@ async def process_like(callback: CallbackQuery):
             builder2 = InlineKeyboardBuilder()
             if from_username:
                 builder2.button(text=f"📱 НАПИСАТЬ {from_profile_name}", url=f"https://t.me/{from_username}")
-            builder2.button(text=f"{STYLES['next']} ПРОДОЛЖИТЬ", callback_data="view_profiles")
-            builder2.button(text=f"{STYLES['back']} В МЕНЮ", callback_data="back_to_main")
+            builder2.button(text=f"▶️ ПРОДОЛЖИТЬ", callback_data="view_profiles")
+            builder2.button(text=f"◀️ В МЕНЮ", callback_data="back_to_main")
             builder2.adjust(1, 2)
             
             await bot.send_message(
                 to_user,
-                f"{STYLES['divider']}\n"
-                f"{STYLES['like']} ВЗАИМНЫЙ ЛАЙК!\n"
-                f"{STYLES['divider']}\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"❤️ ВЗАИМНЫЙ ЛАЙК!\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n\n"
                 f"Ты понравился {from_profile_name}!\n"
                 f"Теперь вы можете пообщаться!",
                 reply_markup=builder2.as_markup()
             )
             
         else:
-            await callback.answer(f"{STYLES['like']} Лайк отправлен!")
+            await callback.answer(f"❤️ Лайк отправлен!")
             
     except sqlite3.IntegrityError:
-        await callback.answer(f"{STYLES['error']} Ты уже лайкал эту анкету", show_alert=True)
+        await callback.answer(f"❌ Ты уже лайкал эту анкету", show_alert=True)
 
 # ========== ПОКУПКА ЗА ЗВЁЗДЫ ==========
 @dp.callback_query(F.data.startswith("buy_stars_"))
@@ -984,11 +989,11 @@ async def buy_stars(callback: CallbackQuery):
     amount = int(callback.data.split("_")[2])
     days = amount // 50
     
-    prices = [LabeledPrice(label="Премиум ДАЙ ВИНЧИК", amount=amount)]
+    prices = [LabeledPrice(label="Премиум ПИВЧИК", amount=amount)]
     
     await bot.send_invoice(
         chat_id=callback.from_user.id,
-        title="💎 Премиум ДАЙ ВИНЧИК",
+        title="💎 Премиум ПИВЧИК",
         description=f"Премиум на {days} дней",
         payload=f"premium_{days}",
         provider_token="",
@@ -1040,9 +1045,9 @@ async def successful_payment(message: Message):
     db.conn.commit()
     
     await message.answer(
-        f"{STYLES['divider']}\n"
-        f"{STYLES['success']} ОПЛАТА ПРОШЛА!\n"
-        f"{STYLES['divider']}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"✅ ОПЛАТА ПРОШЛА!\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
         f"Тебе добавлено {days} дней Премиума!\n"
         f"Баланс пополнен на {amount} ⭐"
     )
@@ -1051,7 +1056,7 @@ async def successful_payment(message: Message):
 @dp.message(Command("admin"))
 async def admin_panel(message: Message):
     if message.from_user.id not in ADMIN_IDS:
-        await message.answer(f"{STYLES['error']} У тебя нет прав админа")
+        await message.answer(f"❌ У тебя нет прав админа")
         return
     
     cursor = db.conn.cursor()
@@ -1075,13 +1080,13 @@ async def admin_panel(message: Message):
     total_donations = cursor.fetchone()[0] or 0
     
     text = (
-        f"{STYLES['divider']}\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
         f"👑 АДМИН ПАНЕЛЬ\n"
-        f"{STYLES['divider']}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
         f"📊 Статистика:\n"
         f"• 👥 Всего пользователей: {total_users}\n"
         f"• 📝 Всего анкет: {total_profiles}\n"
-        f"• ⭐ Премиум: {premium_users}\n"
+        f"• 💎 Премиум: {premium_users}\n"
         f"• ❤️ Взаимных лайков: {mutual_likes}\n"
         f"• 💰 Донатов: {total_donations} ⭐\n\n"
         f"⚠️ Жалоб: {new_complaints}\n\n"
@@ -1092,7 +1097,7 @@ async def admin_panel(message: Message):
     builder = InlineKeyboardBuilder()
     builder.button(text="📢 РАССЫЛКА", callback_data="admin_broadcast")
     builder.button(text="⚠️ ЖАЛОБЫ", callback_data="admin_complaints")
-    builder.button(text=f"{STYLES['back']} ЗАКРЫТЬ", callback_data="back_to_main")
+    builder.button(text="◀️ ЗАКРЫТЬ", callback_data="back_to_main")
     builder.adjust(2, 1)
     
     await message.answer(
@@ -1111,11 +1116,11 @@ async def my_profile_callback(callback: CallbackQuery):
     
     if not profile:
         await callback.message.edit_text(
-            f"{STYLES['error']} У тебя ещё нет анкеты\n"
-            f"Нажми '🔞 СОЗДАТЬ АНКЕТУ'"
+            f"❌ У тебя ещё нет анкеты\n"
+            f"Нажми '🍺 СОЗДАТЬ АНКЕТУ'"
         )
         await callback.message.answer(
-            f"{STYLES['header']}",
+            f"🍺 ПИВЧИК",
             reply_markup=main_menu(user_id)
         )
         return
@@ -1131,7 +1136,7 @@ async def back_to_main(callback: CallbackQuery, state: FSMContext):
 @dp.callback_query(F.data == "edit_profile_menu")
 async def edit_profile_menu_callback(callback: CallbackQuery):
     await callback.message.edit_caption(
-        caption=f"{STYLES['divider']}\n✏️ РЕДАКТИРОВАНИЕ\n{STYLES['divider']}\n\nЧто хочешь изменить?",
+        caption=f"━━━━━━━━━━━━━━━━━━━━\n✏️ РЕДАКТИРОВАНИЕ\n━━━━━━━━━━━━━━━━━━━━\n\nЧто хочешь изменить?",
         reply_markup=edit_profile_menu()
     )
 
@@ -1142,7 +1147,7 @@ async def view_profiles_callback(callback: CallbackQuery):
     cursor = db.conn.cursor()
     cursor.execute('SELECT profile_id FROM profiles WHERE user_id = ?', (user_id,))
     if not cursor.fetchone():
-        await callback.answer(f"{STYLES['error']} Сначала создай анкету!", show_alert=True)
+        await callback.answer(f"❌ Сначала создай анкету!", show_alert=True)
         return
     
     cursor.execute('SELECT is_premium, views_used FROM users WHERE user_id = ?', (user_id,))
@@ -1153,73 +1158,12 @@ async def view_profiles_callback(callback: CallbackQuery):
     
     if views_used >= limit:
         await callback.message.edit_text(
-            f"{STYLES['error']} Лимит просмотров исчерпан ({limit})\n"
-            f"Купи {STYLES['premium']} для увеличения лимита!"
+            f"❌ Лимит просмотров исчерпан ({limit})\n"
+            f"Купи ПРЕМИУМ для увеличения лимита!"
         )
         return
     
-    cursor.execute('''
-        SELECT p.*, u.username FROM profiles p
-        JOIN users u ON p.user_id = u.user_id
-        WHERE p.user_id != ? 
-        AND p.is_active = 1
-        AND p.user_id NOT IN (
-            SELECT viewed_user_id FROM views WHERE user_id = ?
-        )
-        ORDER BY RANDOM()
-        LIMIT 1
-    ''', (user_id, user_id))
-    
-    profile = cursor.fetchone()
-    
-    if not profile:
-        await callback.message.edit_text(
-            f"{STYLES['header']} Ты посмотрел все анкеты! Заходи позже"
-        )
-        return
-    
-    cursor.execute('''
-        INSERT OR IGNORE INTO views (user_id, viewed_user_id, viewed_at)
-        VALUES (?, ?, ?)
-    ''', (user_id, profile[1], datetime.now().isoformat()))
-    
-    cursor.execute('''
-        UPDATE users SET views_used = views_used + 1 WHERE user_id = ?
-    ''', (user_id,))
-    
-    cursor.execute('''
-        UPDATE profiles SET views_count = views_count + 1 WHERE user_id = ?
-    ''', (profile[1],))
-    
-    db.conn.commit()
-    
-    photo = profile[7]
-    interests = json.loads(profile[8]) if profile[8] else []
-    interests_text = ", ".join(interests) if interests else "Не указаны"
-    
-    text = (
-        f"{STYLES['divider']}\n"
-        f"👤 {profile[2]}, {profile[3]}\n"
-        f"⚥ Пол: {profile[4]}\n"
-        f"🏙 Город: {profile[5]}\n"
-        f"🎯 Интересы: {interests_text}\n"
-        f"{STYLES['divider']}\n"
-        f"📝 {profile[6]}\n\n"
-        f"❤️ Лайков: {profile[12]} | 👁 Просмотров: {profile[11]}"
-    )
-    
-    if photo:
-        await callback.message.delete()
-        await callback.message.answer_photo(
-            photo=photo,
-            caption=text,
-            reply_markup=view_profile_keyboard(profile[1], profile[-1])
-        )
-    else:
-        await callback.message.edit_text(
-            text,
-            reply_markup=view_profile_keyboard(profile[1], profile[-1])
-        )
+    await show_next_profile(callback.message, user_id)
 
 # ========== ЖАЛОБЫ ==========
 @dp.callback_query(F.data.startswith("complaint_"))
@@ -1231,11 +1175,11 @@ async def complaint_start(callback: CallbackQuery, state: FSMContext):
     reasons = ["Спам", "Оскорбления", "Фейк", "18+", "Другое"]
     for reason in reasons:
         builder.button(text=reason, callback_data=f"complaint_reason_{reason}")
-    builder.button(text=f"{STYLES['back']} ОТМЕНА", callback_data="back_to_main")
+    builder.button(text=f"◀️ ОТМЕНА", callback_data="back_to_main")
     builder.adjust(2)
     
     await callback.message.edit_caption(
-        caption=f"{STYLES['divider']}\n⚠️ ЖАЛОБА\n{STYLES['divider']}\n\nВыбери причину:",
+        caption=f"━━━━━━━━━━━━━━━━━━━━\n⚠️ ЖАЛОБА\n━━━━━━━━━━━━━━━━━━━━\n\nВыбери причину:",
         reply_markup=builder.as_markup()
     )
     await state.set_state(ProfileStates.waiting_for_complaint)
@@ -1254,7 +1198,7 @@ async def process_complaint(callback: CallbackQuery, state: FSMContext):
     db.conn.commit()
     
     await state.clear()
-    await callback.answer(f"{STYLES['success']} Жалоба отправлена!", show_alert=True)
+    await callback.answer(f"✅ Жалоба отправлена!", show_alert=True)
     await callback.message.delete()
     await cmd_start(callback.message, None)
 
@@ -1263,11 +1207,11 @@ async def process_complaint(callback: CallbackQuery, state: FSMContext):
 async def delete_profile(callback: CallbackQuery):
     builder = InlineKeyboardBuilder()
     builder.button(text="✅ ДА, УДАЛИТЬ", callback_data="confirm_delete")
-    builder.button(text=f"{STYLES['back']} ОТМЕНА", callback_data="my_profile")
+    builder.button(text=f"◀️ ОТМЕНА", callback_data="my_profile")
     builder.adjust(2)
     
     await callback.message.edit_caption(
-        caption=f"{STYLES['divider']}\n⚠️ УДАЛЕНИЕ\n{STYLES['divider']}\n\nТы точно хочешь удалить анкету?\nЭто действие нельзя отменить!",
+        caption=f"━━━━━━━━━━━━━━━━━━━━\n⚠️ УДАЛЕНИЕ\n━━━━━━━━━━━━━━━━━━━━\n\nТы точно хочешь удалить анкету?\nЭто действие нельзя отменить!",
         reply_markup=builder.as_markup()
     )
 
@@ -1284,10 +1228,10 @@ async def confirm_delete(callback: CallbackQuery):
     
     await callback.message.delete()
     await callback.message.answer(
-        f"{STYLES['divider']}\n"
-        f"{STYLES['success']} АНКЕТА УДАЛЕНА\n"
-        f"{STYLES['divider']}\n\n"
-        f"Чтобы создать новую, нажми '🔞 СОЗДАТЬ АНКЕТУ'",
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"✅ АНКЕТА УДАЛЕНА\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"Чтобы создать новую, нажми '🍺 СОЗДАТЬ АНКЕТУ'",
         reply_markup=get_main_keyboard()
     )
 
@@ -1298,12 +1242,11 @@ async def main():
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
     )
     
-    print("🔞 ========== ДАЙ ВИНЧИК ==========")
-    print("🔞 Бот запускается...")
-    print(f"🔞 Админ: {ADMIN_IDS[0]}")
-    print("🔞 База данных: dai_vinchik.db")
-    print("🔞 Стилистика: ДАЙ ВИНЧИК")
-    print("🔞 =================================")
+    print("🍺 ========== ПИВЧИК ==========")
+    print("🍺 Бот запускается...")
+    print(f"🍺 Админ: {ADMIN_IDS[0]}")
+    print("🍺 База данных: pivchik.db")
+    print("🍺 =============================")
     
     await dp.start_polling(bot)
 
