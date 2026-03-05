@@ -15,7 +15,7 @@ from aiogram.types import LabeledPrice, PreCheckoutQuery
 
 # ========== КОНФИГ ==========
 BOT_TOKEN = "8732723377:AAH4LuAnzfrlLUSFBv17gK7NssNIZtlDFK4"
-ADMIN_ID = 2091630272
+ADMIN_IDS = [2091630272]
 
 FREE_LIMIT = 250
 PREMIUM_LIMIT = 1500
@@ -94,7 +94,6 @@ dp = Dispatcher(storage=MemoryStorage())
 
 # ========== КЛАВИАТУРЫ ==========
 def get_main_keyboard():
-    """Главная клавиатура"""
     kb = [
         [KeyboardButton(text="👤 МОЯ АНКЕТА"), KeyboardButton(text="👀 СМОТРЕТЬ")],
         [KeyboardButton(text="💎 ПРЕМИУМ"), KeyboardButton(text="📊 СТАТИСТИКА")],
@@ -104,12 +103,10 @@ def get_main_keyboard():
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_back_keyboard():
-    """Клавиатура с кнопкой назад"""
     kb = [[KeyboardButton(text="◀️ НАЗАД")]]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_gender_keyboard():
-    """Клавиатура выбора пола"""
     kb = [
         [KeyboardButton(text="👨 МУЖСКОЙ"), KeyboardButton(text="👩 ЖЕНСКИЙ")]
     ]
@@ -120,14 +117,12 @@ def get_gender_keyboard():
 async def cmd_start(message: Message):
     user_id = message.from_user.id
     
-    # Регистрируем пользователя
     cursor.execute('''
         INSERT OR IGNORE INTO users (user_id, username, first_name, joined_date, balance)
         VALUES (?, ?, ?, ?, 0)
     ''', (user_id, message.from_user.username, message.from_user.first_name, datetime.now().isoformat()))
     conn.commit()
     
-    # Приветствие
     await message.answer(
         f"🍺 ДОБРО ПОЖАЛОВАТЬ В ПИВЧИК!\n\n"
         f"🔞 Здесь люди находят друг друга\n\n"
@@ -135,7 +130,6 @@ async def cmd_start(message: Message):
         reply_markup=get_main_keyboard()
     )
     
-    # Инлайн меню
     await show_main_menu(message)
 
 async def show_main_menu(message: Message):
@@ -179,7 +173,7 @@ async def my_profile_reply(message: Message):
     profile = cursor.fetchone()
     
     if not profile:
-        await message.answer("❌ У тебя ещё нет анкеты!")
+        await message.answer("❌ У тебя ещё нет анкеты!\nНажми 📝 СОЗДАТЬ АНКЕТУ в меню")
         return
     
     text = (
@@ -214,7 +208,7 @@ async def view_profiles_reply(message: Message):
     limit = PREMIUM_LIMIT if is_premium else FREE_LIMIT
     
     if views_used >= limit:
-        await message.answer(f"❌ Лимит просмотров исчерпан ({limit})")
+        await message.answer(f"❌ Лимит просмотров исчерпан ({limit})\nКупи 💎 ПРЕМИУМ")
         return
     
     cursor.execute('''
@@ -231,7 +225,7 @@ async def view_profiles_reply(message: Message):
     profile = cursor.fetchone()
     
     if not profile:
-        await message.answer("🍺 Ты посмотрел все анкеты!")
+        await message.answer("🍺 Ты посмотрел все анкеты!\nЗаходи позже")
         return
     
     cursor.execute('''
@@ -273,7 +267,8 @@ async def premium_reply(message: Message):
         f"💰 ЦЕНА:\n"
         f"• 50 ⭐ = 1 день\n"
         f"• 250 ⭐ = 7 дней\n"
-        f"• 1000 ⭐ = 30 дней"
+        f"• 1000 ⭐ = 30 дней\n\n"
+        f"После покупки лимиты обновятся!"
     )
     
     builder = InlineKeyboardBuilder()
@@ -297,11 +292,13 @@ async def stats_reply(message: Message):
             COALESCE(p.views_count, 0),
             COALESCE(p.likes_count, 0),
             (SELECT COUNT(*) FROM views WHERE user_id = ?) as viewed_count,
-            (SELECT COUNT(*) FROM likes WHERE from_user = ?) as likes_given
+            (SELECT COUNT(*) FROM likes WHERE from_user = ?) as likes_given,
+            (SELECT COUNT(*) FROM likes WHERE to_user = ?) as likes_received,
+            (SELECT COUNT(*) FROM likes WHERE is_mutual = 1 AND (from_user = ? OR to_user = ?)) as mutual_count
         FROM users u
         LEFT JOIN profiles p ON u.user_id = p.user_id
         WHERE u.user_id = ?
-    ''', (user_id, user_id, user_id))
+    ''', (user_id, user_id, user_id, user_id, user_id, user_id))
     
     stats = cursor.fetchone()
     
@@ -311,24 +308,36 @@ async def stats_reply(message: Message):
             f"👁 ТЕБЯ ПОСМОТРЕЛИ: {stats[3]}\n"
             f"👁 ТЫ ПОСМОТРЕЛ: {stats[5]}\n"
             f"❤️ ТЕБЯ ЛАЙКНУЛИ: {stats[4]}\n"
-            f"❤️ ТЫ ЛАЙКНУЛ: {stats[6]}"
+            f"❤️ ТЫ ЛАЙКНУЛ: {stats[6]}\n"
+            f"💕 ВЗАИМНЫХ ЛАЙКОВ: {stats[8]}\n\n"
+            f"📈 ОСТАЛОСЬ ПРОСМОТРОВ: {PREMIUM_LIMIT if stats[0] else FREE_LIMIT - stats[1]}\n"
+            f"📈 ОСТАЛОСЬ ЛАЙКОВ: {PREMIUM_LIMIT if stats[0] else FREE_LIMIT - stats[2]}"
         )
         await message.answer(text)
 
 @dp.message(lambda message: message.text == "⚙️ НАСТРОЙКИ")
 async def settings_reply(message: Message):
-    await message.answer("⚙️ НАСТРОЙКИ В РАЗРАБОТКЕ")
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔔 УВЕДОМЛЕНИЯ", callback_data="notify")
+    builder.button(text="🔐 ПРИВАТНОСТЬ", callback_data="privacy")
+    builder.button(text="◀️ НАЗАД", callback_data="back")
+    builder.adjust(1)
+    
+    await message.answer("⚙️ НАСТРОЙКИ", reply_markup=builder.as_markup())
 
 @dp.message(lambda message: message.text == "❓ ПОМОЩЬ")
 async def help_reply(message: Message):
     text = (
         "❓ ПОМОЩЬ\n\n"
-        "1. Нажми 📝 СОЗДАТЬ АНКЕТУ\n"
-        "2. Заполни анкету\n"
-        "3. Нажми 👀 СМОТРЕТЬ\n"
-        "4. Ставь лайки ❤️\n"
-        "5. При взаимном лайке - общайся\n\n"
-        "По вопросам: @admin"
+        "📝 СОЗДАТЬ АНКЕТУ - заполни анкету\n"
+        "👀 СМОТРЕТЬ - смотри анкеты\n"
+        "❤️ ЛАЙК - ставь лайки\n"
+        "💕 ВЗАИМНЫЙ ЛАЙК - можно писать\n\n"
+        "ПРАВИЛА:\n"
+        "• Только реальные фото\n"
+        "• Без оскорблений\n"
+        "• Возраст 18+\n\n"
+        "ПО ВОПРОСАМ: @admin"
     )
     await message.answer(text)
 
@@ -337,7 +346,12 @@ async def balance_reply(message: Message):
     user_id = message.from_user.id
     cursor.execute('SELECT balance FROM users WHERE user_id = ?', (user_id,))
     balance = cursor.fetchone()[0]
-    await message.answer(f"💰 ТВОЙ БАЛАНС: {balance} ⭐")
+    
+    builder = InlineKeyboardBuilder()
+    builder.button(text="⭐ ПОПОЛНИТЬ", callback_data="balance")
+    builder.button(text="◀️ НАЗАД", callback_data="back")
+    
+    await message.answer(f"💰 ТВОЙ БАЛАНС: {balance} ⭐", reply_markup=builder.as_markup())
 
 @dp.message(lambda message: message.text == "◀️ НАЗАД")
 async def back_reply(message: Message, state: FSMContext):
@@ -399,7 +413,7 @@ async def process_gender(message: Message, state: FSMContext):
 async def process_city(message: Message, state: FSMContext):
     await state.update_data(city=message.text)
     await message.answer(
-        "📝 Напиши о себе",
+        "📝 Напиши о себе\n(чем увлекаешься, что ищешь)",
         reply_markup=get_back_keyboard()
     )
     await state.set_state(ProfileStates.about)
@@ -408,7 +422,7 @@ async def process_city(message: Message, state: FSMContext):
 async def process_about(message: Message, state: FSMContext):
     await state.update_data(about=message.text)
     await message.answer(
-        "📸 Отправь свое фото",
+        "📸 Отправь свое фото\n(одно фото обязательно)",
         reply_markup=get_back_keyboard()
     )
     await state.set_state(ProfileStates.photo)
@@ -436,7 +450,7 @@ async def process_photo(message: Message, state: FSMContext):
     
     await state.clear()
     await message.answer(
-        "✅ АНКЕТА СОЗДАНА!",
+        "✅ АНКЕТА СОЗДАНА!\n\nТеперь можно смотреть анкеты 👀",
         reply_markup=get_main_keyboard()
     )
     await show_main_menu(message)
@@ -447,6 +461,10 @@ async def process_like(callback: CallbackQuery):
     from_user = callback.from_user.id
     to_user = int(callback.data.split("_")[1])
     
+    if from_user == to_user:
+        await callback.answer("❌ Нельзя лайкнуть себя!", show_alert=True)
+        return
+    
     cursor.execute('SELECT is_premium, likes_used FROM users WHERE user_id = ?', (from_user,))
     user = cursor.fetchone()
     is_premium = user[0]
@@ -454,7 +472,7 @@ async def process_like(callback: CallbackQuery):
     limit = PREMIUM_LIMIT if is_premium else FREE_LIMIT
     
     if likes_used >= limit:
-        await callback.answer("❌ Лимит лайков исчерпан", show_alert=True)
+        await callback.answer(f"❌ Лимит лайков ({limit}) исчерпан!", show_alert=True)
         return
     
     try:
@@ -473,25 +491,57 @@ async def process_like(callback: CallbackQuery):
         ''', (to_user, from_user))
         
         if cursor.fetchone():
-            cursor.execute('UPDATE likes SET is_mutual = 1 WHERE (from_user = ? AND to_user = ?) OR (from_user = ? AND to_user = ?)',
-                         (from_user, to_user, to_user, from_user))
+            cursor.execute('''
+                UPDATE likes SET is_mutual = 1 
+                WHERE (from_user = ? AND to_user = ?) OR (from_user = ? AND to_user = ?)
+            ''', (from_user, to_user, to_user, from_user))
             conn.commit()
             
-            await callback.answer("❤️ ВЗАИМНЫЙ ЛАЙК!", show_alert=True)
+            await callback.answer("💕 ВЗАИМНЫЙ ЛАЙК!", show_alert=True)
             
             cursor.execute('SELECT name FROM profiles WHERE user_id = ?', (to_user,))
             to_name = cursor.fetchone()[0]
             
+            cursor.execute('SELECT username FROM users WHERE user_id = ?', (to_user,))
+            to_username = cursor.fetchone()[0]
+            
+            # Уведомление первому
+            builder1 = InlineKeyboardBuilder()
+            if to_username:
+                builder1.button(text=f"📱 НАПИСАТЬ {to_name}", url=f"https://t.me/{to_username}")
+            builder1.button(text="▶️ ПРОДОЛЖИТЬ", callback_data="view_profiles")
+            builder1.adjust(1)
+            
             await bot.send_message(
                 from_user,
-                f"❤️ ВЗАИМНЫЙ ЛАЙК С {to_name}!\n"
-                f"ТЕПЕРЬ ВЫ МОЖЕТЕ ПООБЩАТЬСЯ!"
+                f"💕 ВЗАИМНЫЙ ЛАЙК С {to_name}!\n\nТеперь вы можете пообщаться!",
+                reply_markup=builder1.as_markup()
             )
+            
+            # Уведомление второму
+            cursor.execute('SELECT name FROM profiles WHERE user_id = ?', (from_user,))
+            from_name = cursor.fetchone()[0]
+            
+            cursor.execute('SELECT username FROM users WHERE user_id = ?', (from_user,))
+            from_username = cursor.fetchone()[0]
+            
+            builder2 = InlineKeyboardBuilder()
+            if from_username:
+                builder2.button(text=f"📱 НАПИСАТЬ {from_name}", url=f"https://t.me/{from_username}")
+            builder2.button(text="▶️ ПРОДОЛЖИТЬ", callback_data="view_profiles")
+            builder2.adjust(1)
+            
+            await bot.send_message(
+                to_user,
+                f"💕 ВЗАИМНЫЙ ЛАЙК С {from_name}!\n\nТеперь вы можете пообщаться!",
+                reply_markup=builder2.as_markup()
+            )
+            
         else:
             await callback.answer("❤️ ЛАЙК ОТПРАВЛЕН!")
             
-    except:
-        await callback.answer("❌ ТЫ УЖЕ ЛАЙКАЛ ЭТУ АНКЕТУ", show_alert=True)
+    except sqlite3.IntegrityError:
+        await callback.answer("❌ Ты уже лайкал эту анкету", show_alert=True)
 
 # ========== НАВИГАЦИЯ ==========
 @dp.callback_query(lambda c: c.data == "next_profile")
@@ -513,6 +563,31 @@ async def my_profile_callback(callback: CallbackQuery):
 async def view_profiles_callback(callback: CallbackQuery):
     await callback.message.delete()
     await view_profiles_reply(callback.message)
+
+@dp.callback_query(lambda c: c.data == "premium_info")
+async def premium_info_callback(callback: CallbackQuery):
+    await callback.message.delete()
+    await premium_reply(callback.message)
+
+@dp.callback_query(lambda c: c.data == "balance")
+async def balance_callback(callback: CallbackQuery):
+    await callback.message.delete()
+    await balance_reply(callback.message)
+
+@dp.callback_query(lambda c: c.data == "notify")
+async def notify_callback(callback: CallbackQuery):
+    await callback.answer("🔔 Скоро будут уведомления", show_alert=True)
+
+@dp.callback_query(lambda c: c.data == "privacy")
+async def privacy_callback(callback: CallbackQuery):
+    text = (
+        "🔐 ПРИВАТНОСТЬ\n\n"
+        "• Твои данные в безопасности\n"
+        "• Фото видят только пользователи\n"
+        "• Можно удалить анкету (напиши админу)\n"
+        "• Мы не передаем данные третьим лицам"
+    )
+    await callback.message.edit_text(text)
 
 # ========== ПРЕМИУМ ==========
 @dp.callback_query(lambda c: c.data.startswith("buy_"))
@@ -552,12 +627,15 @@ async def successful_payment(message: Message):
     ''', ((datetime.now() + timedelta(days=days)).isoformat(), user_id))
     conn.commit()
     
-    await message.answer(f"✅ ПРЕМИУМ АКТИВИРОВАН НА {days} ДНЕЙ!")
+    await message.answer(
+        f"✅ ПРЕМИУМ АКТИВИРОВАН НА {days} ДНЕЙ!\n\n"
+        f"Теперь у тебя {PREMIUM_LIMIT} просмотров и лайков!"
+    )
 
 # ========== АДМИНКА ==========
 @dp.message(Command("admin"))
 async def admin_panel(message: Message):
-    if message.from_user.id != ADMIN_ID:
+    if message.from_user.id not in ADMIN_IDS:
         await message.answer("❌ НЕТ ДОСТУПА")
         return
     
@@ -565,11 +643,17 @@ async def admin_panel(message: Message):
     users = cursor.fetchone()[0]
     cursor.execute('SELECT COUNT(*) FROM profiles')
     profiles = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM users WHERE is_premium = 1')
+    premium = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM likes WHERE is_mutual = 1')
+    mutual = cursor.fetchone()[0]
     
     await message.answer(
         f"👑 АДМИН ПАНЕЛЬ\n\n"
         f"👥 ПОЛЬЗОВАТЕЛЕЙ: {users}\n"
-        f"📝 АНКЕТ: {profiles}"
+        f"📝 АНКЕТ: {profiles}\n"
+        f"💎 ПРЕМИУМ: {premium}\n"
+        f"💕 ВЗАИМНЫХ: {mutual}"
     )
 
 # ========== ЗАПУСК ==========
@@ -577,7 +661,8 @@ async def main():
     logging.basicConfig(level=logging.INFO)
     print("🍺 ========== ПИВЧИК ==========")
     print("🍺 БОТ ЗАПУЩЕН!")
-    print(f"🍺 АДМИН: {ADMIN_ID}")
+    print(f"🍺 АДМИН: {ADMIN_IDS[0]}")
+    print("🍺 ВЕРСИЯ: СТАБИЛЬНАЯ")
     print("🍺 =============================")
     
     await dp.start_polling(bot)
