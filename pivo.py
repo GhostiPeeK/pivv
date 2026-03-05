@@ -7,7 +7,10 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import Message, CallbackQuery, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import (
+    Message, CallbackQuery, ReplyKeyboardMarkup, KeyboardButton,
+    LabeledPrice, PreCheckoutQuery  # ВОТ ЭТОТ ИМПОРТ БЫЛ ПРОПУЩЕН!
+)
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 # ========== СТИЛЬ ПИВЧИК ==========
@@ -208,7 +211,7 @@ async def my_profile(message: Message):
     
     text = f"""
 {STYLE['divider']}
-{STYLE['profile']} ТВОЯ АНЕТА{premium_badge}
+{STYLE['profile']} ТВОЯ АНКЕТА{premium_badge}
 {STYLE['divider']}
 
 👤 Имя: {profile[2]}
