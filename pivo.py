@@ -93,13 +93,13 @@ cursor.execute('''
         gender TEXT,
         city TEXT,
         about TEXT,
-        photos TEXT,  -- JSON массив фото
+        photos TEXT,
         created_at TEXT,
         updated_at TEXT,
         views_count INTEGER DEFAULT 0,
         likes_count INTEGER DEFAULT 0,
         is_active INTEGER DEFAULT 1,
-        interests TEXT  -- JSON массив интересов
+        interests TEXT
     )
 ''')
 
@@ -149,6 +149,86 @@ cursor.execute('''
         bonus_given INTEGER DEFAULT 0
     )
 ''')
+
+# Чаты по интересам
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS chat_rooms (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        interest TEXT,
+        created_at TEXT,
+        members_count INTEGER DEFAULT 0
+    )
+''')
+
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS chat_members (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id INTEGER,
+        user_id INTEGER,
+        joined_at TEXT,
+        UNIQUE(chat_id, user_id)
+    )
+''')
+
+# Игры
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS games (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user1_id INTEGER,
+        user2_id INTEGER,
+        game_type TEXT,
+        status TEXT,
+        created_at TEXT,
+        completed_at TEXT,
+        winner_id INTEGER
+    )
+''')
+
+# Дни рождения
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS birthdays (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER UNIQUE,
+        birth_date TEXT,
+        birth_year INTEGER,
+        zodiac TEXT,
+        notifications_enabled INTEGER DEFAULT 1
+    )
+''')
+
+# Стикеры
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS stickers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        emoji TEXT,
+        file_id TEXT,
+        price INTEGER DEFAULT 0,
+        is_premium INTEGER DEFAULT 0
+    )
+''')
+
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS user_stickers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        sticker_id INTEGER,
+        obtained_at TEXT,
+        UNIQUE(user_id, sticker_id)
+    )
+''')
+
+# Создаем начальные комнаты чатов
+cursor.execute("SELECT COUNT(*) FROM chat_rooms")
+if cursor.fetchone()[0] == 0:
+    interests = ["🍺 Пиво", "🎵 Музыка", "🎮 Игры", "🏋️ Спорт", "🎬 Кино", "📚 Книги", "✈️ Путешествия", "🐱 Животные"]
+    for interest in interests:
+        cursor.execute('''
+            INSERT INTO chat_rooms (name, interest, created_at)
+            VALUES (?, ?, ?)
+        ''', (f"Чат про {interest}", interest, datetime.now().isoformat()))
+    conn.commit()
 
 conn.commit()
 
@@ -228,6 +308,36 @@ async def cmd_start(message: Message):
           datetime.now().isoformat(), referral_code, datetime.now().isoformat()))
     conn.commit()
     
+    # Проверяем реферальный код в параметрах
+    args = message.text.split()
+    if len(args) > 1:
+        ref_code = args[1]
+        cursor.execute('SELECT user_id FROM users WHERE referral_code = ?', (ref_code,))
+        referrer = cursor.fetchone()
+        if referrer and referrer[0] != user_id:
+            cursor.execute('''
+                INSERT INTO referrals (referrer_id, referred_id, created_at)
+                VALUES (?, ?, ?)
+            ''', (referrer[0], user_id, datetime.now().isoformat()))
+            
+            cursor.execute('''
+                UPDATE users SET 
+                    referral_count = referral_count + 1,
+                    balance = balance + 50,
+                    referral_earnings = referral_earnings + 50
+                WHERE user_id = ?
+            ''', (referrer[0],))
+            
+            cursor.execute('UPDATE users SET referred_by = ? WHERE user_id = ?', (referrer[0], user_id))
+            conn.commit()
+            
+            await bot.send_message(
+                referrer[0],
+                f"🎁 ПО РЕФЕРАЛЬНОЙ ССЫЛКЕ!\n\n"
+                f"Новый пользователь @{message.from_user.username}\n"
+                f"Начислено 50 ⭐ на баланс!"
+            )
+    
     # Приветствие
     welcome_text = f"""
 {STYLE['header']}
@@ -263,7 +373,6 @@ async def my_profile(message: Message):
         )
         return
     
-    # Получаем статистику
     cursor.execute('SELECT COUNT(*) FROM views WHERE viewed_user_id = ?', (user_id,))
     views = cursor.fetchone()[0]
     
@@ -277,7 +386,6 @@ async def my_profile(message: Message):
     is_premium = cursor.fetchone()[0]
     premium_badge = f" 💎" if is_premium else ""
     
-    # Получаем все фото
     photos = json.loads(profile[7]) if profile[7] else []
     main_photo = photos[0] if photos else None
     
@@ -325,13 +433,11 @@ async def my_profile(message: Message):
 async def view_profiles(message: Message):
     user_id = message.from_user.id
     
-    # Проверяем наличие активной анкеты
     cursor.execute('SELECT profile_id FROM profiles WHERE user_id = ? AND is_active = 1', (user_id,))
     if not cursor.fetchone():
         await message.answer(f"❌ Сначала создай анкету через /create")
         return
     
-    # Проверяем лимиты
     cursor.execute('SELECT is_premium, views_used FROM users WHERE user_id = ?', (user_id,))
     user = cursor.fetchone()
     is_premium = user[0]
@@ -345,7 +451,6 @@ async def view_profiles(message: Message):
         )
         return
     
-    # Ищем анкету для просмотра
     cursor.execute('''
         SELECT p.*, u.username FROM profiles p
         JOIN users u ON p.user_id = u.user_id
@@ -368,7 +473,6 @@ async def view_profiles(message: Message):
         )
         return
     
-    # Сохраняем просмотр
     cursor.execute('''
         INSERT INTO views (user_id, viewed_user_id, viewed_at)
         VALUES (?, ?, ?)
@@ -378,7 +482,6 @@ async def view_profiles(message: Message):
     cursor.execute('UPDATE profiles SET views_count = views_count + 1 WHERE user_id = ?', (profile[1],))
     conn.commit()
     
-    # Получаем фото
     photos = json.loads(profile[7]) if profile[7] else []
     main_photo = photos[0] if photos else None
     
@@ -449,50 +552,353 @@ async def show_premium(message: Message):
     
     await message.answer(text, reply_markup=builder.as_markup())
 
-@dp.callback_query(F.data.startswith("buy_"))
-async def buy_premium(callback: CallbackQuery):
-    amount = int(callback.data.split("_")[1])
-    days = amount // 50
+# ========== 🔥 ТОП ==========
+@dp.message(F.text.in_(["🔥 ТОП", "ТОП"]))
+async def show_top(message: Message):
+    # Топ по лайкам
+    cursor.execute('''
+        SELECT u.user_id, p.name, p.likes_count, p.photos 
+        FROM profiles p
+        JOIN users u ON p.user_id = u.user_id
+        WHERE p.is_active = 1
+        ORDER BY p.likes_count DESC
+        LIMIT 10
+    ''')
+    top_likes = cursor.fetchall()
     
-    prices = [LabeledPrice(label="Премиум ПИВЧИК", amount=amount)]
+    # Топ по просмотрам
+    cursor.execute('''
+        SELECT u.user_id, p.name, p.views_count, p.photos 
+        FROM profiles p
+        JOIN users u ON p.user_id = u.user_id
+        WHERE p.is_active = 1
+        ORDER BY p.views_count DESC
+        LIMIT 10
+    ''')
+    top_views = cursor.fetchall()
     
-    await bot.send_invoice(
-        chat_id=callback.from_user.id,
-        title="💎 Премиум ПИВЧИК",
-        description=f"Премиум на {days} дней",
-        payload=f"premium_{days}",
-        provider_token="",
-        currency="XTR",
-        prices=prices
-    )
+    text = f"""
+{STYLE['divider']}
+🔥 ТОП-ЧАРТ ПИВЧИК
+{STYLE['divider']}
 
-@dp.pre_checkout_query()
-async def pre_checkout_handler(pre_checkout_query: PreCheckoutQuery):
-    await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
+❤️ ТОП ПО ЛАЙКАМ:
+"""
+    
+    for i, profile in enumerate(top_likes[:5], 1):
+        text += f"{i}. {profile[1]} - {profile[2]} ❤️\n"
+    
+    text += f"\n👁 ТОП ПО ПРОСМОТРАМ:\n"
+    
+    for i, profile in enumerate(top_views[:5], 1):
+        text += f"{i}. {profile[1]} - {profile[2]} 👁\n"
+    
+    text += f"\n{STYLE['divider']}"
+    
+    await message.answer(text)
 
-@dp.message(F.successful_payment)
-async def successful_payment(message: Message):
+# ========== 🎁 РЕФЕРАЛЫ ==========
+@dp.message(F.text.in_(["🎁 РЕФЕРАЛЫ", "РЕФЕРАЛЫ"]))
+async def show_referrals(message: Message):
     user_id = message.from_user.id
-    payload = message.successful_payment.invoice_payload
-    days = int(payload.split("_")[1])
     
     cursor.execute('''
-        UPDATE users 
-        SET is_premium = 1,
-            premium_until = ?,
-            likes_used = 0,
-            views_used = 0
-        WHERE user_id = ?
-    ''', ((datetime.now() + timedelta(days=days)).isoformat(), user_id))
+        SELECT referral_code, referral_count, referral_earnings 
+        FROM users WHERE user_id = ?
+    ''', (user_id,))
+    data = cursor.fetchone()
+    
+    if not data:
+        return
+    
+    bot_info = await bot.get_me()
+    referral_link = f"https://t.me/{bot_info.username}?start={data[0]}"
+    
+    text = f"""
+{STYLE['divider']}
+🎁 РЕФЕРАЛЬНАЯ СИСТЕМА
+{STYLE['divider']}
+
+📊 ТВОЯ СТАТИСТИКА:
+• Приглашено: {data[1]} чел.
+• Заработано: {data[2]} ⭐
+
+💰 БОНУСЫ:
+• За каждого друга: 50 ⭐
+• За 10 друзей: + 1 день ПРЕМИУМ
+• За 50 друзей: + 7 дней ПРЕМИУМ
+
+🔗 ТВОЯ ССЫЛКА:
+{referral_link}
+
+{STYLE['divider']}
+"""
+    
+    await message.answer(text)
+
+# ========== 🎮 ИГРЫ ==========
+@dp.message(F.text.in_(["🎮 ИГРЫ", "ИГРЫ"]))
+async def show_games(message: Message):
+    text = f"""
+{STYLE['divider']}
+🎮 ИГРЫ ДЛЯ ЗНАКОМСТВ
+{STYLE['divider']}
+
+Выбери игру:
+
+🎲 КТО Я?
+Угадай персонажа по описанию
+
+🎯 УГАДАЙ ЧИСЛО
+От 1 до 100, 5 попыток
+
+💕 ЛЮБОВНАЯ ВИКТОРИНА
+Узнай совместимость
+
+🎨 НАРИСУЙ ЭМОЦИЮ
+Угадай по смайликам
+
+Играй с новыми знакомыми и узнавай друг друга лучше!
+
+{STYLE['divider']}
+"""
+    
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🎲 КТО Я?", callback_data="game_whoami")
+    builder.button(text="🎯 УГАДАЙ ЧИСЛО", callback_data="game_number")
+    builder.button(text="💕 ЛЮБОВНАЯ ВИКТОРИНА", callback_data="game_love")
+    builder.button(text="🎨 НАРИСУЙ ЭМОЦИЮ", callback_data="game_emoji")
+    builder.adjust(2)
+    
+    await message.answer(text, reply_markup=builder.as_markup())
+
+# ========== 💬 ЧАТЫ ==========
+@dp.message(F.text.in_(["💬 ЧАТЫ", "ЧАТЫ"]))
+async def show_chats(message: Message):
+    cursor.execute('SELECT id, name, interest, members_count FROM chat_rooms')
+    chats = cursor.fetchall()
+    
+    text = f"""
+{STYLE['divider']}
+💬 ЧАТЫ ПО ИНТЕРЕСАМ
+{STYLE['divider']}
+
+Выбери чат по душе:
+"""
+    
+    builder = InlineKeyboardBuilder()
+    for chat in chats:
+        text += f"\n{chat[2]} {chat[1]} - {chat[3]} 👥"
+        builder.button(text=f"{chat[2]} {chat[1]}", callback_data=f"chat_{chat[0]}")
+    
+    builder.adjust(2)
+    text += f"\n\n{STYLE['divider']}"
+    
+    await message.answer(text, reply_markup=builder.as_markup())
+
+# ========== 🎂 ДНИ РОЖДЕНИЯ ==========
+@dp.message(F.text.in_(["🎂 ДНИ РОЖДЕНИЯ", "ДНИ РОЖДЕНИЯ"]))
+async def show_birthdays(message: Message):
+    today = datetime.now()
+    
+    # Ищем именинников на сегодня
+    cursor.execute('''
+        SELECT u.user_id, u.first_name, b.birth_date, b.zodiac 
+        FROM birthdays b
+        JOIN users u ON b.user_id = u.user_id
+        WHERE strftime('%m-%d', b.birth_date) = ?
+    ''', (today.strftime("%m-%d"),))
+    
+    birthdays_today = cursor.fetchall()
+    
+    text = f"""
+{STYLE['divider']}
+🎂 ДНИ РОЖДЕНИЯ
+{STYLE['divider']}
+
+📅 СЕГОДНЯ:
+"""
+    
+    if birthdays_today:
+        for b in birthdays_today:
+            text += f"🎂 {b[1]} - {b[3]}\n"
+    else:
+        text += "Сегодня именинников нет\n"
+    
+    text += f"\n📅 БЛИЖАЙШИЕ:\n"
+    
+    # Ищем ближайшие дни рождения
+    cursor.execute('''
+        SELECT u.first_name, b.birth_date, b.zodiac 
+        FROM birthdays b
+        JOIN users u ON b.user_id = u.user_id
+        ORDER BY 
+            CASE 
+                WHEN substr(b.birth_date, 6) >= ? THEN substr(b.birth_date, 6)
+                ELSE substr(b.birth_date, 6) || '2000'
+            END
+        LIMIT 5
+    ''', (today.strftime("%m-%d"),))
+    
+    upcoming = cursor.fetchall()
+    for u in upcoming:
+        birth_date = datetime.strptime(u[1], "%d.%m.%Y")
+        text += f"📅 {u[0]} - {u[2]} ({birth_date.strftime('%d.%m')})\n"
+    
+    text += f"\nЧтобы добавить свой день рождения:\n/setbirthday 01.01.1990"
+    text += f"\n{STYLE['divider']}"
+    
+    await message.answer(text)
+
+@dp.message(Command("setbirthday"))
+async def set_birthday(message: Message):
+    try:
+        date_str = message.text.replace("/setbirthday", "").strip()
+        birth_date = datetime.strptime(date_str, "%d.%m.%Y")
+        
+        # Определяем знак зодиака
+        zodiac = get_zodiac(birth_date)
+        
+        cursor.execute('''
+            INSERT OR REPLACE INTO birthdays 
+            (user_id, birth_date, birth_year, zodiac, notifications_enabled)
+            VALUES (?, ?, ?, ?, 1)
+        ''', (message.from_user.id, date_str, birth_date.year, zodiac))
+        conn.commit()
+        
+        # Обновляем возраст в анкете
+        age = (datetime.now() - birth_date).days // 365
+        cursor.execute('UPDATE profiles SET age = ? WHERE user_id = ?', (age, message.from_user.id))
+        conn.commit()
+        
+        await message.answer(
+            f"✅ День рождения сохранен!\n"
+            f"Знак зодиака: {zodiac}\n"
+            f"Возраст обновлен: {age}"
+        )
+        
+    except Exception as e:
+        await message.answer("❌ Неверный формат. Используй: /setbirthday 01.01.1990")
+
+def get_zodiac(date):
+    day, month = date.day, date.month
+    if (month == 3 and day >= 21) or (month == 4 and day <= 19):
+        return "♈ Овен"
+    elif (month == 4 and day >= 20) or (month == 5 and day <= 20):
+        return "♉ Телец"
+    elif (month == 5 and day >= 21) or (month == 6 and day <= 20):
+        return "♊ Близнецы"
+    elif (month == 6 and day >= 21) or (month == 7 and day <= 22):
+        return "♋ Рак"
+    elif (month == 7 and day >= 23) or (month == 8 and day <= 22):
+        return "♌ Лев"
+    elif (month == 8 and day >= 23) or (month == 9 and day <= 22):
+        return "♍ Дева"
+    elif (month == 9 and day >= 23) or (month == 10 and day <= 22):
+        return "♎ Весы"
+    elif (month == 10 and day >= 23) or (month == 11 and day <= 21):
+        return "♏ Скорпион"
+    elif (month == 11 and day >= 22) or (month == 12 and day <= 21):
+        return "♐ Стрелец"
+    elif (month == 12 and day >= 22) or (month == 1 and day <= 19):
+        return "♑ Козерог"
+    elif (month == 1 and day >= 20) or (month == 2 and day <= 18):
+        return "♒ Водолей"
+    else:
+        return "♓ Рыбы"
+
+# ========== 📍 ПОИСК РЯДОМ ==========
+@dp.message(F.text.in_(["📍 ПОИСК РЯДОМ", "ПОИСК РЯДОМ"]))
+async def find_nearby(message: Message):
+    user_id = message.from_user.id
+    
+    cursor.execute('SELECT city FROM users WHERE user_id = ?', (user_id,))
+    user_city = cursor.fetchone()
+    
+    if not user_city or not user_city[0]:
+        await message.answer(
+            f"⚠️ Укажи свой город в настройках!\n"
+            f"Используй команду /setcity НазваниеГорода"
+        )
+        return
+    
+    cursor.execute('''
+        SELECT u.user_id, p.name, p.age, p.gender, p.photos 
+        FROM users u
+        JOIN profiles p ON u.user_id = p.user_id
+        WHERE u.city = ? AND u.user_id != ? AND p.is_active = 1
+        ORDER BY RANDOM()
+        LIMIT 5
+    ''', (user_city[0], user_id))
+    
+    nearby = cursor.fetchall()
+    
+    if not nearby:
+        await message.answer(
+            f"❌ В твоем городе пока никого нет :(\n"
+            f"Пригласи друзей через реферальную систему!"
+        )
+        return
+    
+    text = f"{STYLE['divider']}\n📍 ЛЮДИ РЯДОМ\n{STYLE['divider']}\n\n"
+    
+    for person in nearby[:5]:
+        gender_emoji = "👨" if person[3] == "Мужской" else "👩"
+        text += f"{gender_emoji} {person[1]}, {person[2]}\n"
+    
+    text += f"\n{STYLE['divider']}"
+    
+    await message.answer(text)
+
+@dp.message(Command("setcity"))
+async def set_city(message: Message):
+    city = message.text.replace("/setcity", "").strip()
+    if not city:
+        await message.answer("❌ Напиши: /setcity НазваниеГорода")
+        return
+    
+    cursor.execute('UPDATE users SET city = ? WHERE user_id = ?', (city, message.from_user.id))
     conn.commit()
     
-    await message.answer(
-        f"{STYLE['divider']}\n"
-        f"✅ ПРЕМИУМ АКТИВИРОВАН!\n"
-        f"{STYLE['divider']}\n\n"
-        f"На {days} дней\n"
-        f"Теперь у тебя {PREMIUM_LIMIT} 👁 и ❤️"
-    )
+    await message.answer(f"✅ Город {city} сохранен!")
+
+# ========== 🎨 СТИКЕРЫ ==========
+@dp.message(F.text.in_(["🎨 СТИКЕРЫ", "СТИКЕРЫ"]))
+async def show_stickers(message: Message):
+    user_id = message.from_user.id
+    
+    cursor.execute('''
+        SELECT s.id, s.name, s.emoji, s.price, s.is_premium,
+               CASE WHEN us.id IS NOT NULL THEN 1 ELSE 0 END as owned
+        FROM stickers s
+        LEFT JOIN user_stickers us ON s.id = us.sticker_id AND us.user_id = ?
+        ORDER BY s.is_premium, s.price
+    ''', (user_id,))
+    
+    stickers = cursor.fetchall()
+    
+    text = f"""
+{STYLE['divider']}
+🎨 КОЛЛЕКЦИЯ СТИКЕРОВ
+{STYLE['divider']}
+
+"""
+    
+    builder = InlineKeyboardBuilder()
+    for sticker in stickers:
+        status = "✅" if sticker[5] else "❌"
+        price_info = f"{sticker[3]} ⭐" if sticker[3] > 0 else "Бесплатно"
+        premium_info = " 💎" if sticker[4] else ""
+        
+        text += f"{status} {sticker[2]} {sticker[1]}{premium_info} - {price_info}\n"
+        
+        if not sticker[5]:
+            builder.button(text=f"Купить {sticker[2]}", callback_data=f"buy_sticker_{sticker[0]}")
+    
+    builder.adjust(2)
+    text += f"\n{STYLE['divider']}"
+    
+    await message.answer(text, reply_markup=builder.as_markup())
 
 # ========== 📊 СТАТИСТИКА ==========
 @dp.message(F.text.in_(["📊 СТАТИСТИКА", "СТАТИСТИКА"]))
@@ -727,7 +1133,7 @@ async def process_about(message: Message, state: FSMContext):
     await state.update_data(about=message.text)
     await message.answer(
         f"📸 Отправь свое фото\n"
-        f"(можно добавить еще фото позже командой /addphoto)",
+        f"(можно добавить еще фото позже)",
         reply_markup=get_back_keyboard()
     )
     await state.set_state(ProfileStates.photo)
@@ -737,7 +1143,6 @@ async def process_photo(message: Message, state: FSMContext):
     photo_id = message.photo[-1].file_id
     data = await state.get_data()
     
-    # Сохраняем первое фото как массив
     photos = json.dumps([photo_id])
     
     cursor.execute('''
@@ -766,213 +1171,11 @@ async def process_photo(message: Message, state: FSMContext):
         reply_markup=get_main_keyboard()
     )
 
-# ========== ДОБАВЛЕНИЕ ФОТО ==========
-@dp.callback_query(F.data == "add_photo")
-async def add_photo_callback(callback: CallbackQuery, state: FSMContext):
-    await callback.message.delete()
-    await callback.message.answer(
-        f"{STYLE['divider']}\n"
-        f"📸 ДОБАВЛЕНИЕ ФОТО\n"
-        f"{STYLE['divider']}\n\n"
-        f"Отправь фото для добавления в анкету\n"
-        f"(можно добавить до 5 фото)",
-        reply_markup=get_back_keyboard()
-    )
-    await state.set_state(ProfileStates.photos)
-
-@dp.message(ProfileStates.photos, F.photo)
-async def process_add_photo(message: Message, state: FSMContext):
-    user_id = message.from_user.id
-    photo_id = message.photo[-1].file_id
-    
-    cursor.execute('SELECT photos FROM profiles WHERE user_id = ?', (user_id,))
-    result = cursor.fetchone()
-    
-    if result and result[0]:
-        photos = json.loads(result[0])
-    else:
-        photos = []
-    
-    if len(photos) >= 5:
-        await message.answer(f"❌ Максимум 5 фото!")
-        return
-    
-    photos.append(photo_id)
-    cursor.execute('UPDATE profiles SET photos = ?, updated_at = ? WHERE user_id = ?', 
-                  (json.dumps(photos), datetime.now().isoformat(), user_id))
-    conn.commit()
-    
-    await message.answer(f"✅ Фото добавлено! ({len(photos)}/5)")
-    
-    if len(photos) < 5:
-        await message.answer("Можешь добавить еще фото или нажми /done")
-    else:
-        await state.clear()
-        await message.answer(f"✅ Все фото сохранены!", reply_markup=get_main_keyboard())
-
-@dp.message(Command("done"))
-async def done_photos(message: Message, state: FSMContext):
-    await state.clear()
-    await message.answer(f"✅ Готово!", reply_markup=get_main_keyboard())
-
-# ========== РЕДАКТИРОВАНИЕ ==========
-@dp.callback_query(F.data == "edit_profile_menu")
-async def edit_profile_menu(callback: CallbackQuery):
-    builder = InlineKeyboardBuilder()
-    builder.button(text="👤 ИМЯ", callback_data="edit_name")
-    builder.button(text="📅 ВОЗРАСТ", callback_data="edit_age")
-    builder.button(text="⚥ ПОЛ", callback_data="edit_gender")
-    builder.button(text="🏙 ГОРОД", callback_data="edit_city")
-    builder.button(text="📝 О СЕБЕ", callback_data="edit_about")
-    builder.button(text="◀️ НАЗАД", callback_data="back_to_profile")
-    builder.adjust(2, 2, 1, 1)
-    
-    await callback.message.edit_caption(
-        caption=f"{STYLE['divider']}\n✏️ РЕДАКТИРОВАНИЕ АНКЕТЫ\n{STYLE['divider']}\n\nЧто хочешь изменить?",
-        reply_markup=builder.as_markup()
-    )
-
-@dp.callback_query(F.data == "back_to_profile")
-async def back_to_profile(callback: CallbackQuery):
-    await callback.message.delete()
-    await my_profile(callback.message)
-
-@dp.callback_query(F.data.startswith("edit_"))
-async def edit_field(callback: CallbackQuery, state: FSMContext):
-    field = callback.data.replace("edit_", "")
-    field_names = {
-        "name": "ИМЯ",
-        "age": "ВОЗРАСТ",
-        "gender": "ПОЛ",
-        "city": "ГОРОД",
-        "about": "О СЕБЕ"
-    }
-    
-    await state.update_data(edit_field=field)
-    await callback.message.delete()
-    
-    if field == "gender":
-        await callback.message.answer(
-            f"{STYLE['divider']}\n"
-            f"✏️ ИЗМЕНЕНИЕ {field_names[field]}\n"
-            f"{STYLE['divider']}\n\n"
-            f"Выбери новый пол:",
-            reply_markup=get_gender_keyboard()
-        )
-    else:
-        await callback.message.answer(
-            f"{STYLE['divider']}\n"
-            f"✏️ ИЗМЕНЕНИЕ {field_names[field]}\n"
-            f"{STYLE['divider']}\n\n"
-            f"Введи новое значение:",
-            reply_markup=get_back_keyboard()
-        )
-    
-    await state.set_state(EditProfileStates.value)
-
-@dp.message(EditProfileStates.value)
-async def process_edit_value(message: Message, state: FSMContext):
-    data = await state.get_data()
-    field = data.get("edit_field")
-    user_id = message.from_user.id
-    
-    if field == "name":
-        if len(message.text) > 50:
-            await message.answer(f"❌ Слишком длинное имя")
-            return
-        cursor.execute('UPDATE profiles SET name = ?, updated_at = ? WHERE user_id = ?', 
-                      (message.text, datetime.now().isoformat(), user_id))
-        await message.answer(f"✅ Имя обновлено!")
-        
-    elif field == "age":
-        try:
-            age = int(message.text)
-            if age < MIN_AGE or age > MAX_AGE:
-                raise ValueError
-            cursor.execute('UPDATE profiles SET age = ?, updated_at = ? WHERE user_id = ?', 
-                          (age, datetime.now().isoformat(), user_id))
-            await message.answer(f"✅ Возраст обновлен!")
-        except:
-            await message.answer(f"❌ Введи число от {MIN_AGE} до {MAX_AGE}")
-            return
-            
-    elif field == "gender":
-        if message.text.upper() not in ["МУЖСКОЙ", "ЖЕНСКИЙ"]:
-            await message.answer(f"❌ Используй кнопки")
-            return
-        gender = "Мужской" if message.text.upper() == "МУЖСКОЙ" else "Женский"
-        cursor.execute('UPDATE profiles SET gender = ?, updated_at = ? WHERE user_id = ?', 
-                      (gender, datetime.now().isoformat(), user_id))
-        await message.answer(f"✅ Пол обновлен!")
-        
-    elif field == "city":
-        if len(message.text) > 50:
-            await message.answer(f"❌ Слишком длинное название города")
-            return
-        cursor.execute('UPDATE profiles SET city = ?, updated_at = ? WHERE user_id = ?', 
-                      (message.text, datetime.now().isoformat(), user_id))
-        await message.answer(f"✅ Город обновлен!")
-        
-    elif field == "about":
-        if len(message.text) > 500:
-            await message.answer(f"❌ Слишком длинное описание")
-            return
-        cursor.execute('UPDATE profiles SET about = ?, updated_at = ? WHERE user_id = ?', 
-                      (message.text, datetime.now().isoformat(), user_id))
-        await message.answer(f"✅ Описание обновлено!")
-    
-    conn.commit()
-    await state.clear()
-    await message.answer(f"👤 Возвращаемся в анкету...", reply_markup=get_main_keyboard())
-    await my_profile(message)
-
-# ========== УДАЛЕНИЕ ==========
-@dp.callback_query(F.data == "delete_profile")
-async def delete_profile_confirm(callback: CallbackQuery):
-    builder = InlineKeyboardBuilder()
-    builder.button(text=f"✅ ДА, УДАЛИТЬ", callback_data="confirm_delete")
-    builder.button(text=f"◀️ ОТМЕНА", callback_data="back_to_profile")
-    builder.adjust(2)
-    
-    await callback.message.edit_caption(
-        caption=f"{STYLE['divider']}\n"
-                f"⚠️ УДАЛЕНИЕ АНКЕТЫ\n"
-                f"{STYLE['divider']}\n\n"
-                f"Ты уверен? Это действие нельзя отменить!\n\n"
-                f"Все твои лайки и просмотры будут удалены.",
-        reply_markup=builder.as_markup()
-    )
-
-@dp.callback_query(F.data == "confirm_delete")
-async def delete_profile(callback: CallbackQuery):
-    user_id = callback.from_user.id
-    
-    cursor.execute('UPDATE profiles SET is_active = 0 WHERE user_id = ?', (user_id,))
-    cursor.execute('DELETE FROM likes WHERE from_user = ? OR to_user = ?', (user_id, user_id))
-    cursor.execute('DELETE FROM views WHERE user_id = ? OR viewed_user_id = ?', (user_id, user_id))
-    conn.commit()
-    
-    await callback.message.delete()
-    await callback.message.answer(
-        f"✅ Анкета удалена!\n\n"
-        f"Чтобы создать новую, нажми /create",
-        reply_markup=get_main_keyboard()
-    )
-
 # ========== НАЗАД ==========
 @dp.message(F.text.in_(["◀️ НАЗАД", "НАЗАД"]))
 async def go_back(message: Message, state: FSMContext):
     await state.clear()
     await cmd_start(message)
-
-# ========== БАЛАНС ==========
-@dp.message(F.text.in_(["💰 БАЛАНС", "БАЛАНС"]))
-async def show_balance(message: Message):
-    user_id = message.from_user.id
-    cursor.execute('SELECT balance FROM users WHERE user_id = ?', (user_id,))
-    balance = cursor.fetchone()[0]
-    
-    await message.answer(f"💰 ТВОЙ БАЛАНС: {balance} ⭐")
 
 # ========== ПОМОЩЬ ==========
 @dp.message(F.text.in_(["❓ ПОМОЩЬ", "ПОМОЩЬ"]))
@@ -987,16 +1190,21 @@ async def show_help(message: Message):
 /create - создать анкету
 /addphoto - добавить фото
 /setcity - указать город
+/setbirthday - указать день рождения
 
 👤 МОЯ АНКЕТА - просмотр и редактирование
 👀 СМОТРЕТЬ - листать анкеты
 ❤️ ЛАЙК - поставить лайк
 💕 ВЗАИМНЫЙ ЛАЙК - можно писать
 
+🔥 ТОП - самые популярные
+🎁 РЕФЕРАЛЫ - приглашай друзей
+🎮 ИГРЫ - игры для знакомств
+💬 ЧАТЫ - общение по интересам
+
 📊 КОМАНДЫ:
 /premium - купить премиум
 /stats - статистика
-/help - помощь
 
 ⚠️ ПРАВИЛА:
 • Только реальные фото
@@ -1017,6 +1225,7 @@ async def main():
 {STYLE['beer']} ПИВЧИК ЗАПУЩЕН!
 {STYLE['beer']} АДМИН: {ADMIN_IDS[0]}
 {STYLE['beer']} СТАТУС: ВСЕ РАБОТАЕТ
+{STYLE['beer']} ФИЧИ: 10/10
 {STYLE['header']}
 """)
     
