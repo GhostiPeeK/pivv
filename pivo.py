@@ -4,7 +4,7 @@ import asyncio
 import json
 from datetime import datetime, timedelta
 
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder, ReplyKeyboardMarkup, KeyboardButton
@@ -164,8 +164,8 @@ async def show_main_menu(message: Message):
     
     await message.answer("🍺 МЕНЮ:", reply_markup=builder.as_markup())
 
-# ========== ОБРАБОТКА REPLY КНОПОК ==========
-@dp.message(lambda message: message.text == "👤 МОЯ АНКЕТА")
+# ========== ОБРАБОТКА REPLY КНОПОК (ИСПРАВЛЕНО) ==========
+@dp.message(F.text == "👤 МОЯ АНКЕТА")
 async def my_profile_reply(message: Message):
     user_id = message.from_user.id
     
@@ -173,7 +173,7 @@ async def my_profile_reply(message: Message):
     profile = cursor.fetchone()
     
     if not profile:
-        await message.answer("❌ У тебя ещё нет анкеты!\nНажми 📝 СОЗДАТЬ АНКЕТУ в меню")
+        await message.answer("❌ У тебя ещё нет анкеты!\nНажни 📝 СОЗДАТЬ АНКЕТУ в меню")
         return
     
     text = (
@@ -192,7 +192,7 @@ async def my_profile_reply(message: Message):
     else:
         await message.answer(text)
 
-@dp.message(lambda message: message.text == "👀 СМОТРЕТЬ")
+@dp.message(F.text == "👀 СМОТРЕТЬ")
 async def view_profiles_reply(message: Message):
     user_id = message.from_user.id
     
@@ -258,7 +258,7 @@ async def view_profiles_reply(message: Message):
         reply_markup=builder.as_markup()
     )
 
-@dp.message(lambda message: message.text == "💎 ПРЕМИУМ")
+@dp.message(F.text == "💎 ПРЕМИУМ")
 async def premium_reply(message: Message):
     text = (
         f"💎 ПРЕМИУМ ПИВЧИК\n\n"
@@ -280,7 +280,7 @@ async def premium_reply(message: Message):
     
     await message.answer(text, reply_markup=builder.as_markup())
 
-@dp.message(lambda message: message.text == "📊 СТАТИСТИКА")
+@dp.message(F.text == "📊 СТАТИСТИКА")
 async def stats_reply(message: Message):
     user_id = message.from_user.id
     
@@ -315,7 +315,7 @@ async def stats_reply(message: Message):
         )
         await message.answer(text)
 
-@dp.message(lambda message: message.text == "⚙️ НАСТРОЙКИ")
+@dp.message(F.text == "⚙️ НАСТРОЙКИ")
 async def settings_reply(message: Message):
     builder = InlineKeyboardBuilder()
     builder.button(text="🔔 УВЕДОМЛЕНИЯ", callback_data="notify")
@@ -325,7 +325,7 @@ async def settings_reply(message: Message):
     
     await message.answer("⚙️ НАСТРОЙКИ", reply_markup=builder.as_markup())
 
-@dp.message(lambda message: message.text == "❓ ПОМОЩЬ")
+@dp.message(F.text == "❓ ПОМОЩЬ")
 async def help_reply(message: Message):
     text = (
         "❓ ПОМОЩЬ\n\n"
@@ -341,7 +341,7 @@ async def help_reply(message: Message):
     )
     await message.answer(text)
 
-@dp.message(lambda message: message.text == "💰 БАЛАНС")
+@dp.message(F.text == "💰 БАЛАНС")
 async def balance_reply(message: Message):
     user_id = message.from_user.id
     cursor.execute('SELECT balance FROM users WHERE user_id = ?', (user_id,))
@@ -353,13 +353,13 @@ async def balance_reply(message: Message):
     
     await message.answer(f"💰 ТВОЙ БАЛАНС: {balance} ⭐", reply_markup=builder.as_markup())
 
-@dp.message(lambda message: message.text == "◀️ НАЗАД")
+@dp.message(F.text == "◀️ НАЗАД")
 async def back_reply(message: Message, state: FSMContext):
     await state.clear()
     await cmd_start(message)
 
 # ========== СОЗДАНИЕ АНКЕТЫ ==========
-@dp.callback_query(lambda c: c.data == "create_profile")
+@dp.callback_query(F.data == "create_profile")
 async def create_profile(callback: CallbackQuery, state: FSMContext):
     await callback.message.delete()
     await callback.message.answer(
@@ -395,12 +395,8 @@ async def process_age(message: Message, state: FSMContext):
     )
     await state.set_state(ProfileStates.gender)
 
-@dp.message(ProfileStates.gender)
+@dp.message(ProfileStates.gender, F.text.in_(["👨 МУЖСКОЙ", "👩 ЖЕНСКОЙ", "МУЖСКОЙ", "ЖЕНСКОЙ"]))
 async def process_gender(message: Message, state: FSMContext):
-    if message.text not in ["👨 МУЖСКОЙ", "👩 ЖЕНСКОЙ", "МУЖСКОЙ", "ЖЕНСКОЙ"]:
-        await message.answer("❌ Используй кнопки")
-        return
-    
     gender = "Мужской" if "МУЖСКОЙ" in message.text else "Женский"
     await state.update_data(gender=gender)
     await message.answer(
@@ -427,7 +423,7 @@ async def process_about(message: Message, state: FSMContext):
     )
     await state.set_state(ProfileStates.photo)
 
-@dp.message(ProfileStates.photo, lambda message: message.photo)
+@dp.message(ProfileStates.photo, F.photo)
 async def process_photo(message: Message, state: FSMContext):
     photo_id = message.photo[-1].file_id
     data = await state.get_data()
@@ -456,7 +452,7 @@ async def process_photo(message: Message, state: FSMContext):
     await show_main_menu(message)
 
 # ========== ЛАЙКИ ==========
-@dp.callback_query(lambda c: c.data.startswith("like_"))
+@dp.callback_query(F.data.startswith("like_"))
 async def process_like(callback: CallbackQuery):
     from_user = callback.from_user.id
     to_user = int(callback.data.split("_")[1])
@@ -505,7 +501,6 @@ async def process_like(callback: CallbackQuery):
             cursor.execute('SELECT username FROM users WHERE user_id = ?', (to_user,))
             to_username = cursor.fetchone()[0]
             
-            # Уведомление первому
             builder1 = InlineKeyboardBuilder()
             if to_username:
                 builder1.button(text=f"📱 НАПИСАТЬ {to_name}", url=f"https://t.me/{to_username}")
@@ -518,7 +513,6 @@ async def process_like(callback: CallbackQuery):
                 reply_markup=builder1.as_markup()
             )
             
-            # Уведомление второму
             cursor.execute('SELECT name FROM profiles WHERE user_id = ?', (from_user,))
             from_name = cursor.fetchone()[0]
             
@@ -544,41 +538,41 @@ async def process_like(callback: CallbackQuery):
         await callback.answer("❌ Ты уже лайкал эту анкету", show_alert=True)
 
 # ========== НАВИГАЦИЯ ==========
-@dp.callback_query(lambda c: c.data == "next_profile")
+@dp.callback_query(F.data == "next_profile")
 async def next_profile(callback: CallbackQuery):
     await callback.message.delete()
     await view_profiles_reply(callback.message)
 
-@dp.callback_query(lambda c: c.data == "back")
+@dp.callback_query(F.data == "back")
 async def back_callback(callback: CallbackQuery):
     await callback.message.delete()
     await cmd_start(callback.message)
 
-@dp.callback_query(lambda c: c.data == "my_profile")
+@dp.callback_query(F.data == "my_profile")
 async def my_profile_callback(callback: CallbackQuery):
     await callback.message.delete()
     await my_profile_reply(callback.message)
 
-@dp.callback_query(lambda c: c.data == "view_profiles")
+@dp.callback_query(F.data == "view_profiles")
 async def view_profiles_callback(callback: CallbackQuery):
     await callback.message.delete()
     await view_profiles_reply(callback.message)
 
-@dp.callback_query(lambda c: c.data == "premium_info")
+@dp.callback_query(F.data == "premium_info")
 async def premium_info_callback(callback: CallbackQuery):
     await callback.message.delete()
     await premium_reply(callback.message)
 
-@dp.callback_query(lambda c: c.data == "balance")
+@dp.callback_query(F.data == "balance")
 async def balance_callback(callback: CallbackQuery):
     await callback.message.delete()
     await balance_reply(callback.message)
 
-@dp.callback_query(lambda c: c.data == "notify")
+@dp.callback_query(F.data == "notify")
 async def notify_callback(callback: CallbackQuery):
     await callback.answer("🔔 Скоро будут уведомления", show_alert=True)
 
-@dp.callback_query(lambda c: c.data == "privacy")
+@dp.callback_query(F.data == "privacy")
 async def privacy_callback(callback: CallbackQuery):
     text = (
         "🔐 ПРИВАТНОСТЬ\n\n"
@@ -590,7 +584,7 @@ async def privacy_callback(callback: CallbackQuery):
     await callback.message.edit_text(text)
 
 # ========== ПРЕМИУМ ==========
-@dp.callback_query(lambda c: c.data.startswith("buy_"))
+@dp.callback_query(F.data.startswith("buy_"))
 async def buy_premium(callback: CallbackQuery):
     amount = int(callback.data.split("_")[1])
     days = amount // 50
@@ -611,7 +605,7 @@ async def buy_premium(callback: CallbackQuery):
 async def pre_checkout_handler(pre_checkout_query: PreCheckoutQuery):
     await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
 
-@dp.message(lambda message: message.successful_payment)
+@dp.message(F.successful_payment)
 async def successful_payment(message: Message):
     user_id = message.from_user.id
     payload = message.successful_payment.invoice_payload
@@ -662,7 +656,7 @@ async def main():
     print("🍺 ========== ПИВЧИК ==========")
     print("🍺 БОТ ЗАПУЩЕН!")
     print(f"🍺 АДМИН: {ADMIN_IDS[0]}")
-    print("🍺 ВЕРСИЯ: СТАБИЛЬНАЯ")
+    print("🍺 ВЕРСИЯ: РАБОЧАЯ")
     print("🍺 =============================")
     
     await dp.start_polling(bot)
