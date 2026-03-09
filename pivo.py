@@ -11,7 +11,7 @@ from aiogram.types import Message, CallbackQuery, ReplyKeyboardMarkup, KeyboardB
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 # ========== МИНИМАЛИСТИЧНЫЙ КОНФИГ ==========
-BOT_TOKEN = "8732723377:AAH4LuAnzfrlLUSFBv17gK7NssNIZtlDFK4"
+BOT_TOKEN = "8734061255:AAEzBNpKObyERxjtE01QfoItNAaUCr6z59s"
 ADMIN_ID = 2091630272
 
 FREE_LIMIT = 250
