@@ -27,7 +27,6 @@ class Database:
         print("💾 БАЗА ГОТОВА")
     
     def create_tables(self):
-        # Только самое важное
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY,
@@ -43,7 +42,8 @@ class Database:
                 views_used INTEGER DEFAULT 0,
                 likes_count INTEGER DEFAULT 0,
                 views_count INTEGER DEFAULT 0,
-                balance INTEGER DEFAULT 0
+                balance INTEGER DEFAULT 0,
+                last_viewed_id INTEGER DEFAULT 0
             )
         ''')
         
@@ -53,6 +53,7 @@ class Database:
                 from_user INTEGER,
                 to_user INTEGER,
                 is_mutual INTEGER DEFAULT 0,
+                created_at TEXT,
                 UNIQUE(from_user, to_user)
             )
         ''')
@@ -83,7 +84,6 @@ dp = Dispatcher(storage=MemoryStorage())
 
 # ========== МИНИМАЛИСТИЧНАЯ КЛАВИАТУРА ==========
 def get_menu():
-    """Только 6 кнопок — идеально"""
     kb = [
         [KeyboardButton(text="👤 Я"), KeyboardButton(text="👀 Смотреть")],
         [KeyboardButton(text="⭐ Топ"), KeyboardButton(text="📊 Мое")],
@@ -99,7 +99,6 @@ def back():
 async def start(message: Message):
     user_id = message.from_user.id
     
-    # Проверяем есть ли юзер
     user = db.cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,)).fetchone()
     if not user:
         db.cursor.execute('''
@@ -112,7 +111,7 @@ async def start(message: Message):
         f"🍺 ПИВЧИК\n\n"
         f"привет, {message.from_user.first_name}\n\n"
         f"👤 Я — твоя анкета\n"
-        f"👀 Смотреть — люди рядом\n"
+        f"👀 Смотреть — люди\n"
         f"⭐ Топ — лучшие\n"
         f"📊 Мое — статистика\n"
         f"💎 Premium — больше\n"
@@ -126,7 +125,7 @@ async def my_profile(message: Message):
     user_id = message.from_user.id
     user = db.cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,)).fetchone()
     
-    if not user or not user[2]:  # нет имени = нет анкеты
+    if not user or not user[2]:
         await message.answer("❌ анкеты нет\nнапиши /create")
         return
     
@@ -158,21 +157,42 @@ async def view(message: Message):
         await message.answer("❌ лимит на сегодня\n💎 Premium снимает лимиты")
         return
     
+    await show_next_profile(message, user_id)
+
+async def show_next_profile(message: Message, user_id: int):
+    # Получаем последнего просмотренного
+    user = db.cursor.execute('SELECT last_viewed_id FROM users WHERE user_id = ?', (user_id,)).fetchone()
+    last_viewed = user[0] if user else 0
+    
     # Ищем кого не смотрел
     candidates = db.cursor.execute('''
         SELECT * FROM users 
         WHERE user_id != ? 
+        AND user_id > ?
         AND user_id NOT IN (SELECT viewed_user_id FROM views WHERE user_id = ?)
         AND name IS NOT NULL
-        ORDER BY RANDOM() LIMIT 1
-    ''', (user_id, user_id)).fetchone()
+        ORDER BY user_id LIMIT 1
+    ''', (user_id, last_viewed, user_id)).fetchone()
+    
+    # Если после последнего нет, начинаем сначала
+    if not candidates:
+        candidates = db.cursor.execute('''
+            SELECT * FROM users 
+            WHERE user_id != ? 
+            AND user_id NOT IN (SELECT viewed_user_id FROM views WHERE user_id = ?)
+            AND name IS NOT NULL
+            ORDER BY user_id LIMIT 1
+        ''', (user_id, user_id)).fetchone()
     
     if not candidates:
         await message.answer("🎉 ты всех посмотрел!")
         return
     
+    # Обновляем последнего просмотренного
+    db.cursor.execute('UPDATE users SET last_viewed_id = ? WHERE user_id = ?', (candidates[0], user_id))
+    
     # Сохраняем просмотр
-    db.cursor.execute('INSERT INTO views (user_id, viewed_user_id) VALUES (?, ?)', (user_id, candidates[0]))
+    db.cursor.execute('INSERT OR IGNORE INTO views (user_id, viewed_user_id) VALUES (?, ?)', (user_id, candidates[0]))
     db.cursor.execute('UPDATE users SET views_used = views_used + 1, views_count = views_count + 1 WHERE user_id = ?', (user_id,))
     db.cursor.execute('UPDATE users SET views_count = views_count + 1 WHERE user_id = ?', (candidates[0],))
     db.conn.commit()
@@ -194,9 +214,9 @@ async def view(message: Message):
 @dp.callback_query(F.data == "next")
 async def next_profile(callback: CallbackQuery):
     await callback.message.delete()
-    await view(callback.message)
+    await show_next_profile(callback.message, callback.from_user.id)
 
-# ========== ❤️ ЛАЙКИ (С КНОПКОЙ ПОСЛЕ ВЗАИМКИ) ==========
+# ========== ❤️ ЛАЙКИ (С УВЕДОМЛЕНИЯМИ) ==========
 @dp.callback_query(F.data.startswith("like_"))
 async def like(callback: CallbackQuery):
     from_user = callback.from_user.id
@@ -214,10 +234,38 @@ async def like(callback: CallbackQuery):
         return
     
     try:
-        db.cursor.execute('INSERT INTO likes (from_user, to_user) VALUES (?, ?)', (from_user, to_user))
+        # Сохраняем лайк с датой
+        now = datetime.now().isoformat()
+        db.cursor.execute('INSERT INTO likes (from_user, to_user, created_at) VALUES (?, ?, ?)', (from_user, to_user, now))
         db.cursor.execute('UPDATE users SET likes_used = likes_used + 1, likes_count = likes_count + 1 WHERE user_id = ?', (from_user,))
         db.cursor.execute('UPDATE users SET likes_count = likes_count + 1 WHERE user_id = ?', (to_user,))
         db.conn.commit()
+        
+        # Получаем инфу о том, кто лайкнул
+        from_user_data = db.cursor.execute('SELECT username, name FROM users WHERE user_id = ?', (from_user,)).fetchone()
+        from_username = from_user_data[0]
+        from_name = from_user_data[1]
+        
+        # Получаем инфу о том, кого лайкнули
+        to_user_data = db.cursor.execute('SELECT username, name FROM users WHERE user_id = ?', (to_user,)).fetchone()
+        to_username = to_user_data[0]
+        to_name = to_user_data[1]
+        
+        # ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ тому, кого лайкнули
+        if from_username:
+            kb = InlineKeyboardBuilder()
+            kb.button(text=f"👤 {from_name}", url=f"https://t.me/{from_username}")
+            
+            await bot.send_message(
+                to_user,
+                f"❤️ Тебя лайкнул(а) {from_name}!",
+                reply_markup=kb.as_markup()
+            )
+        else:
+            await bot.send_message(
+                to_user,
+                f"❤️ Тебя лайкнул(а) {from_name}!"
+            )
         
         # Проверка взаимности
         mutual = db.cursor.execute('''
@@ -230,48 +278,28 @@ async def like(callback: CallbackQuery):
                             (from_user, to_user, to_user, from_user))
             db.conn.commit()
             
-            # Получаем инфу о том, кого лайкнули
-            to_user_data = db.cursor.execute('SELECT username, name FROM users WHERE user_id = ?', (to_user,)).fetchone()
-            to_username = to_user_data[0]
-            to_name = to_user_data[1]
-            
-            # Получаем инфу о том, кто лайкнул
-            from_user_data = db.cursor.execute('SELECT username, name FROM users WHERE user_id = ?', (from_user,)).fetchone()
-            from_username = from_user_data[0]
-            from_name = from_user_data[1]
-            
             await callback.answer("💕 ВЗАИМНО!", show_alert=True)
             
-            # КНОПКА ДЛЯ ПЕРВОГО — написать второму
+            # КНОПКА ДЛЯ ПЕРВОГО
             if to_username:
                 kb1 = InlineKeyboardBuilder()
                 kb1.button(text=f"💬 Написать {to_name}", url=f"https://t.me/{to_username}")
                 
                 await bot.send_message(
                     from_user,
-                    f"💕 Взаимный интерес с {to_name}!\n\nМожешь написать ей/ему:",
+                    f"💕 Взаимный интерес с {to_name}!\n\nМожешь написать:",
                     reply_markup=kb1.as_markup()
                 )
-            else:
-                await bot.send_message(
-                    from_user,
-                    f"💕 Взаимный интерес с {to_name}!\n\nК сожалению, у {to_name} нет username, но вы в ЛС не напишете."
-                )
             
-            # КНОПКА ДЛЯ ВТОРОГО — написать первому
+            # КНОПКА ДЛЯ ВТОРОГО
             if from_username:
                 kb2 = InlineKeyboardBuilder()
                 kb2.button(text=f"💬 Написать {from_name}", url=f"https://t.me/{from_username}")
                 
                 await bot.send_message(
                     to_user,
-                    f"💕 Взаимный интерес с {from_name}!\n\nМожешь написать ей/ему:",
+                    f"💕 Взаимный интерес с {from_name}!\n\nМожешь написать:",
                     reply_markup=kb2.as_markup()
-                )
-            else:
-                await bot.send_message(
-                    to_user,
-                    f"💕 Взаимный интерес с {from_name}!\n\nК сожалению, у {from_name} нет username."
                 )
         else:
             await callback.answer("❤️")
@@ -394,7 +422,7 @@ async def help_msg(message: Message):
 /create — создать анкету
 👤 Я — моя анкета
 👀 Смотреть — люди
-❤️ — поставить лайк
+❤️ — лайк (придет уведомление)
 💕 взаимный — можно писать
 
 всё просто
@@ -477,6 +505,9 @@ async def admin(message: Message):
 async def main():
     logging.basicConfig(level=logging.INFO)
     print("\n🍺 ПИВЧИК MINIMAL\n")
+    print("✅ Уведомления о лайках")
+    print("✅ Кнопка → работает идеально")
+    print("✅ Взаимка → сразу кнопка в ЛС")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
